@@ -850,12 +850,13 @@ const CLIENT_ID = "76793776-3330-496f-97f1-9f0c034f3f07";
 const TENANT_ID = "58b310e1-9278-47ab-8e49-792728818c9e";
 const SCOPES = [
   "User.Read","Files.ReadWrite.All","Sites.ReadWrite.All",
-  // Teams 채널 관리 권한
-  "Group.ReadWrite.All",
-  "Channel.ReadWrite.All",
-  "ChannelMessage.Send",
-  "ChannelMessage.ReadWrite",
-  "TeamsTab.ReadWrite.All"
+  // Teams 채널 관리 권한 (Microsoft Graph 정식 권한명)
+  "Group.ReadWrite.All",         // 그룹 정보 (채널 삭제 시 필요)
+  "Channel.Create",              // 채널 생성
+  "ChannelSettings.ReadWrite.All", // 채널 설정 변경 (이름 등)
+  "ChannelMessage.Send",         // 메시지 전송
+  "ChannelMessage.ReadWrite",    // 메시지 읽기/쓰기
+  "TeamsTab.ReadWrite.All"       // 탭 관리
 ];
 
 // Teams 팀 ID
