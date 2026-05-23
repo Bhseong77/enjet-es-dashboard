@@ -964,77 +964,22 @@ async function init() {
   try {
     await waitForMSAL();
     
-    // ━━ ES 모듈 전용 캐시 키 사용 (다른 모듈과 충돌 방지) ━━
+    // ━━ 영업 모듈과 동일한 패턴 (loginPopup 방식) ━━
     msalInstance = new msal.PublicClientApplication({
       auth: { 
         clientId: CLIENT_ID, 
         authority: `https://login.microsoftonline.com/${TENANT_ID}`,
-        redirectUri: window.location.origin + window.location.pathname,
-        postLogoutRedirectUri: window.location.origin + window.location.pathname,
-        navigateToLoginRequestUrl: false  // ⭐ Fragment 처리 후 다시 리디렉션 방지
+        redirectUri: location.href.split("?")[0].split("#")[0]
       },
-      cache: { 
-        cacheLocation: "sessionStorage",
-        storeAuthStateInCookie: false
-      },
-      system: {
-        // 로깅 비활성화 (콘솔 노이즈 방지)
-        loggerOptions: {
-          loggerCallback: () => {},
-          piiLoggingEnabled: false
-        }
-      }
+      cache: { cacheLocation: "sessionStorage" }
     });
     
     await msalInstance.initialize();
-    
-    // ━━ 리디렉션 응답 처리 (에러 캐치 강화) ━━
-    let redirectHandled = false;
-    try {
-      const res = await msalInstance.handleRedirectPromise();
-      if (res && res.account) {
-        userAccount = res.account;
-        msalInstance.setActiveAccount(res.account);
-        redirectHandled = true;
-        await afterLogin();
-        return;
-      }
-    } catch (e) {
-      console.error("[MSAL] 리디렉션 처리 실패:", e);
-      // 캐시가 깨진 경우 - 자동 복구 시도
-      if (e.errorCode === "no_cached_authority_error" || 
-          e.errorCode === "interaction_in_progress" ||
-          e.errorCode === "hash_does_not_contain_known_properties" ||
-          (e.message || "").includes("invalid_grant")) {
-        console.log("[MSAL] 캐시 자동 정리 시도");
-        try {
-          // sessionStorage 정리
-          const keysToRemove = [];
-          for (let i = 0; i < sessionStorage.length; i++) {
-            const key = sessionStorage.key(i);
-            if (key && (key.includes("msal") || key.startsWith(CLIENT_ID))) {
-              keysToRemove.push(key);
-            }
-          }
-          keysToRemove.forEach(k => sessionStorage.removeItem(k));
-          
-          // URL fragment 정리
-          if (window.location.hash) {
-            window.history.replaceState(null, "", window.location.pathname + window.location.search);
-          }
-          
-          toast("⚠️ 세션 초기화 - 다시 로그인하세요", "warn");
-        } catch (e2) { console.error("[MSAL] 캐시 정리 실패:", e2); }
-      }
-    }
-    
-    if (redirectHandled) return;
     
     // ━━ 기존 계정 확인 ━━
     const accounts = msalInstance.getAllAccounts();
     if (accounts.length > 0) {
       userAccount = accounts[0];
-      msalInstance.setActiveAccount(accounts[0]);
       await afterLogin();
     } else {
       $("loginScreen").classList.add("on");
@@ -1042,7 +987,6 @@ async function init() {
     
   } catch (e) {
     console.error("[ES] init() 실패:", e);
-    // 로그인 화면 보여주기
     $("loginScreen").classList.add("on");
     const errorBox = document.createElement("div");
     errorBox.style.cssText = "background:#fee2e2;color:#991b1b;padding:12px;border-radius:8px;margin-top:16px;font-size:12px";
@@ -1052,20 +996,15 @@ async function init() {
   }
 }
 
-// 로그인 함수 - 새 권한 동의 화면 강제
+// ⭐ loginRedirect → loginPopup (영업 모듈과 동일 방식)
 async function signIn() {
   try {
-    // 기존 캐시 정리 (혹시 모를 충돌 방지)
-    const accounts = msalInstance.getAllAccounts();
-    if (accounts.length === 0) {
-      // 새 로그인 - 권한 명시적 요청
-      await msalInstance.loginRedirect({ 
-        scopes: SCOPES,
-        prompt: "select_account"  // 계정 선택 화면 표시 (혼동 방지)
-      });
-    } else {
-      await msalInstance.loginRedirect({ scopes: SCOPES });
-    }
+    const result = await msalInstance.loginPopup({ 
+      scopes: SCOPES,
+      prompt: "select_account"
+    });
+    userAccount = result.account;
+    await afterLogin();
   } catch (e) {
     toast("로그인 실패: " + e.message, "error");
     console.error("[MSAL] 로그인 실패:", e);
@@ -1073,7 +1012,9 @@ async function signIn() {
 }
 
 function signOut() {
-  msalInstance.logoutRedirect();
+  msalInstance.logoutPopup({ account: userAccount });
+  userAccount = null;
+  location.reload();
 }
 
 async function getToken() {
@@ -1083,7 +1024,10 @@ async function getToken() {
     return accessToken;
   } catch (e) {
     if (e instanceof msal.InteractionRequiredAuthError) {
-      await msalInstance.acquireTokenRedirect({ scopes: SCOPES });
+      // Popup 방식으로 추가 인증 (Redirect 대신)
+      const res = await msalInstance.acquireTokenPopup({ scopes: SCOPES, account: userAccount });
+      accessToken = res.accessToken;
+      return accessToken;
     }
     throw e;
   }
