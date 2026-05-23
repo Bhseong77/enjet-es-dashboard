@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+<!-- 📱 PWA / Mobile App -->
+<meta name="theme-color" content="#1a6fd4">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ES 대시보드">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="apple-touch-icon" href='data:image/svg+xml;charset=UTF-8,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"%3E%3Crect width="192" height="192" rx="36" fill="%231a6fd4"/%3E%3Ctext x="96" y="130" text-anchor="middle" fill="%23fff" font-size="112" font-weight="900" font-family="sans-serif"%3EES%3C/text%3E%3C/svg%3E'>
+
 <title>ENJET ES사업부 대시보드</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
@@ -180,12 +189,38 @@ tr.clickable:hover { background:var(--bg3); }
 .todo-item-title { font-weight:700; color:var(--t1); }
 .todo-item-meta { font-size:11px; color:var(--t3); margin-top:2px; }
 
-/* RESPONSIVE */
+/* RESPONSIVE - 모바일 최적화 강화 */
 @media (max-width:640px) {
   .hdr-title { font-size:20px; }
   .kpi-val { font-size:20px; }
   .main { padding:12px; }
   .tab { padding:12px 12px; font-size:12px; }
+  .kpi-grid { grid-template-columns:repeat(2, 1fr) !important; gap:8px !important; }
+  .kpi { padding:12px 10px !important; }
+  .section { padding:14px !important; }
+  .modal { max-width:96vw !important; margin:10px; max-height:92vh; }
+  .modal-body { max-height:60vh; overflow-y:auto; padding:14px !important; }
+  table { font-size:11px !important; }
+  table th, table td { padding:6px 4px !important; }
+  .btn { padding:8px 12px; font-size:13px; }
+  .tabbar { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .tabbar::-webkit-scrollbar { display:none; }
+  .qf-input { font-size:14px !important; padding:10px !important; }
+  
+  /* 알림 패널 풀스크린 */
+  #notifPanel, #salesAlertsPanel { width:96vw !important; right:2vw !important; top:50px !important; max-height:80vh !important; }
+}
+
+/* 터치 디바이스 최적화 */
+@media (hover: none) {
+  .clickable, button { min-height:42px; }
+  .btn.xs { min-height:32px; }
+}
+
+/* 스플래시 (PWA 첫 로딩) */
+@media (display-mode: standalone) {
+  body { user-select:none; -webkit-user-select:none; }
+  .header { padding-top:max(14px, env(safe-area-inset-top)); }
 }
 </style>
 </head>
@@ -210,6 +245,7 @@ tr.clickable:hover { background:var(--bg3); }
         <span style="font-size:12px;background:rgba(255,255,255,0.25);padding:3px 8px;border-radius:99px;font-weight:700">🧪 BETA</span>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn-back" onclick="showNotifications()" title="알림 센터">🔔</button>
         <button class="btn-back" onclick="location.href='https://bhseong77.github.io/Main/'">← 메인</button>
         <button class="btn-logout" onclick="signOut()">로그아웃</button>
       </div>
@@ -227,6 +263,7 @@ tr.clickable:hover { background:var(--bg3); }
       <div class="tab" data-tab="se" onclick="go('se')">🔧 SE팀</div>
       <div class="tab" data-tab="pe" onclick="go('pe')">🧪 PE팀</div>
       <div class="tab" data-tab="ae" onclick="go('ae')">🛠️ AE팀</div>
+      <div class="tab" data-tab="manufacturing" onclick="go('manufacturing')">🏭 제조/출하</div>
       <div class="tab" data-tab="bom" onclick="go('bom')">📋 BOM</div>
       <div class="tab" data-tab="docs" onclick="go('docs')">📚 문서</div>
       <div class="tab" data-tab="kpi" onclick="go('kpi')">📊 팀 KPI</div>
@@ -461,7 +498,53 @@ tr.clickable:hover { background:var(--bg3); }
     </div>
   </div>
 
-  <!-- TAB: BOM -->
+  <!-- TAB: 제조/출하 (Stage 8-11) -->
+  <div id="tab-manufacturing" class="tab-panel hidden">
+    <div class="main">
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-label">제조 진행</div><div class="kpi-val" id="mfgKpiInProgress">-</div><div class="kpi-sub">현재</div></div>
+        <div class="kpi orange"><div class="kpi-label">입고 대기</div><div class="kpi-val" id="mfgKpiInbound">-</div><div class="kpi-sub">부품</div></div>
+        <div class="kpi green"><div class="kpi-label">SAT 대기</div><div class="kpi-val" id="mfgKpiSat">-</div><div class="kpi-sub">건</div></div>
+        <div class="kpi purple"><div class="kpi-label">현장 FAT</div><div class="kpi-val" id="mfgKpiFat">-</div><div class="kpi-sub">진행</div></div>
+      </div>
+
+      <!-- 실제 BOM (설계 완료 후) -->
+      <div class="section">
+        <div class="section-head">
+          <div><div class="section-title"><span class="section-icon">📐</span>실제 BOM (설계 완료 후)</div><div class="section-sub">기구/전장 설계 완료 → 실제 BOM 확정 → 변경분 구매 재발주</div></div>
+          <button class="btn" onclick="openRealBomModal()">+ 실제 BOM 등록</button>
+        </div>
+        <div id="realBomList"><div class="loading-card">실제 BOM 데이터 로딩 중...</div></div>
+      </div>
+
+      <!-- 입고/출고 트래킹 -->
+      <div class="section">
+        <div class="section-head">
+          <div><div class="section-title"><span class="section-icon">🚚</span>입고/출고 트래킹</div><div class="section-sub">구매에서 입고 → ES 출고 → 장비 제조 진행</div></div>
+        </div>
+        <div id="inboundList"><div class="loading-card">입고 정보 로딩 중...</div></div>
+      </div>
+
+      <!-- 제조 진행 상태 -->
+      <div class="section">
+        <div class="section-head">
+          <div><div class="section-title"><span class="section-icon">⚙️</span>제조 진행 상태</div><div class="section-sub">기구조립 → 전장조립 → 디버깅 → SAT → 출하</div></div>
+          <button class="btn" onclick="openMfgStatusModal()">+ 제조 등록</button>
+        </div>
+        <div id="mfgStatusList"><div class="loading-card">제조 데이터 로딩 중...</div></div>
+      </div>
+
+      <!-- SAT/FAT 관리 -->
+      <div class="section">
+        <div class="section-head">
+          <div><div class="section-title"><span class="section-icon">✅</span>SAT / FAT 관리</div><div class="section-sub">내부 SAT → 출하 → 현장 설치 → FAT</div></div>
+          <button class="btn" onclick="openAcceptanceModal()">+ 검수 등록</button>
+        </div>
+        <div id="acceptanceList"><div class="loading-card">검수 데이터 로딩 중...</div></div>
+      </div>
+    </div>
+  </div>
+  
   <div id="tab-bom" class="tab-panel hidden">
     <div class="main">
       <div class="section">
@@ -523,7 +606,45 @@ tr.clickable:hover { background:var(--bg3); }
   <!-- TAB: KPI -->
   <div id="tab-kpi" class="tab-panel hidden">
     <div class="main">
-      <div class="loading-card">📊 KPI 모듈은 Phase 4에서 구현됩니다</div>
+      <!-- 팀별 KPI -->
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-label">SE팀 가동률</div><div class="kpi-val" id="kpiSeUtil">-</div><div class="kpi-sub">평균</div></div>
+        <div class="kpi green"><div class="kpi-label">PE팀 가동률</div><div class="kpi-val" id="kpiPeUtil">-</div><div class="kpi-sub">평균</div></div>
+        <div class="kpi orange"><div class="kpi-label">AE팀 가동률</div><div class="kpi-val" id="kpiAeUtil">-</div><div class="kpi-sub">평균</div></div>
+        <div class="kpi purple"><div class="kpi-label">총 견적 누적</div><div class="kpi-val" id="kpiQuoteTotal">-</div><div class="kpi-sub">건</div></div>
+      </div>
+
+      <!-- 월별 견적 추이 -->
+      <div class="section">
+        <div class="section-head">
+          <div><div class="section-title"><span class="section-icon">📈</span>월별 견적 추이</div><div class="section-sub">ES사업부에서 작성한 견적 건수</div></div>
+        </div>
+        <div id="quoteMonthlyChart" style="padding:20px"></div>
+      </div>
+
+      <!-- 팀별 프로젝트 분포 -->
+      <div class="section">
+        <div class="section-head">
+          <div><div class="section-title"><span class="section-icon">👥</span>팀별 담당 프로젝트</div><div class="section-sub">진행중인 프로젝트의 팀별 배정 현황</div></div>
+        </div>
+        <div id="teamProjectDist" style="padding:20px"></div>
+      </div>
+
+      <!-- 처리 시간 분석 -->
+      <div class="section">
+        <div class="section-head">
+          <div><div class="section-title"><span class="section-icon">⏱️</span>견적 처리 시간 분석</div><div class="section-sub">영업 요청 → ES 견적 완료까지 평균 소요일</div></div>
+        </div>
+        <div id="processingTimeAnalysis" style="padding:20px"></div>
+      </div>
+
+      <!-- 검수 합격률 -->
+      <div class="section">
+        <div class="section-head">
+          <div><div class="section-title"><span class="section-icon">✅</span>SAT/FAT 합격률</div><div class="section-sub">검수 통계 (최근 6개월)</div></div>
+        </div>
+        <div id="acceptanceRate" style="padding:20px"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -683,6 +804,150 @@ tr.clickable:hover { background:var(--bg3); }
     <div class="modal-foot">
       <button class="btn outline" onclick="closeModal('modalDocUpload')">취소</button>
       <button class="btn" onclick="uploadDoc()">📤 업로드</button>
+    </div>
+  </div>
+</div>
+
+<!-- ━━ 실제 BOM 등록 모달 (Stage 8) ━━ -->
+<div id="modalRealBom" class="modal-backdrop">
+  <div class="modal lg">
+    <div class="modal-head" style="background:linear-gradient(135deg,#1a6fd4,#0f4c81)">
+      <h2>📐 실제 BOM 등록 (설계 완료 후)</h2>
+      <button class="modal-close" onclick="closeModal('modalRealBom')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:#fef3c7;padding:10px;border-radius:8px;margin-bottom:14px;font-size:12px;color:#92400e">
+        💡 기구/전장 설계 완료 후 확정된 실제 BOM을 등록합니다.<br>
+        예상 BOM과 비교하여 변경분이 자동 감지되며, 변경분은 구매에 재발주됩니다.
+      </div>
+      
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div>
+          <label class="qf-label">프로젝트 코드</label>
+          <select id="rbF_projectCode" class="qf-input"><option value="">선택...</option></select>
+        </div>
+        <div>
+          <label class="qf-label">설계 버전</label>
+          <input type="text" id="rbF_version" class="qf-input" value="v1.0" placeholder="v1.0">
+        </div>
+      </div>
+      
+      <div style="margin-bottom:10px"><label class="qf-label">설계 완료일</label><input type="date" id="rbF_completedDate" class="qf-input"></div>
+      
+      <div style="background:var(--bg3);padding:12px;border-radius:8px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <strong>📋 부품 목록</strong>
+          <div style="display:flex;gap:6px">
+            <button class="btn outline xs" onclick="loadEstimatedBom()" title="예상 BOM에서 가져오기">📥 예상 BOM 복사</button>
+            <button class="btn xs" onclick="addRealBomRow()">+ 부품 추가</button>
+          </div>
+        </div>
+        <div id="realBomItems"></div>
+      </div>
+      
+      <div style="margin-bottom:10px"><label class="qf-label">변경 사항 / 비고</label><textarea id="rbF_changeNotes" class="qf-input" rows="3" placeholder="예상 BOM과 다른 부분 설명"></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn outline" onclick="closeModal('modalRealBom')">취소</button>
+      <button class="btn warn" onclick="saveRealBom(false)">💾 임시 저장</button>
+      <button class="btn" onclick="saveRealBom(true)">🚀 확정 + 변경분 구매 재발주</button>
+    </div>
+  </div>
+</div>
+
+<!-- ━━ 제조 상태 등록 모달 (Stage 10) ━━ -->
+<div id="modalMfgStatus" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-head" style="background:linear-gradient(135deg,#f59e0b,#d97706)">
+      <h2>⚙️ 제조 진행 등록</h2>
+      <button class="modal-close" onclick="closeModal('modalMfgStatus')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:10px"><label class="qf-label">프로젝트 코드</label>
+        <select id="msF_projectCode" class="qf-input"><option value="">선택...</option></select>
+      </div>
+      <div style="margin-bottom:10px"><label class="qf-label">제조 단계</label>
+        <select id="msF_stage" class="qf-input">
+          <option value="기구조립">🔧 기구 조립</option>
+          <option value="전장조립">⚡ 전장 조립</option>
+          <option value="배선">🔌 배선 작업</option>
+          <option value="조립완료">✅ 조립 완료</option>
+          <option value="디버깅">🐛 제어 프로그램 디버깅</option>
+          <option value="내부테스트">🧪 내부 테스트</option>
+          <option value="포장">📦 포장</option>
+          <option value="출하대기">🚚 출하 대기</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div><label class="qf-label">시작일</label><input type="date" id="msF_startDate" class="qf-input"></div>
+        <div><label class="qf-label">완료일</label><input type="date" id="msF_endDate" class="qf-input"></div>
+      </div>
+      <div style="margin-bottom:10px"><label class="qf-label">담당자</label><input type="text" id="msF_owner" class="qf-input"></div>
+      <div style="margin-bottom:10px"><label class="qf-label">진행률 (%)</label><input type="number" id="msF_progress" class="qf-input" min="0" max="100" value="0"></div>
+      <div style="margin-bottom:10px"><label class="qf-label">상태</label>
+        <select id="msF_status" class="qf-input">
+          <option value="진행중">진행중</option>
+          <option value="완료">완료</option>
+          <option value="지연">지연</option>
+          <option value="중단">중단</option>
+        </select>
+      </div>
+      <div style="margin-bottom:10px"><label class="qf-label">비고</label><textarea id="msF_note" class="qf-input" rows="3"></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn outline" onclick="closeModal('modalMfgStatus')">취소</button>
+      <button class="btn" onclick="saveMfgStatus()">💾 저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ━━ SAT/FAT 검수 등록 모달 (Stage 11) ━━ -->
+<div id="modalAcceptance" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-head" style="background:linear-gradient(135deg,#10b981,#047857)">
+      <h2>✅ SAT / FAT 검수</h2>
+      <button class="modal-close" onclick="closeModal('modalAcceptance')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:10px"><label class="qf-label">프로젝트 코드</label>
+        <select id="acF_projectCode" class="qf-input"><option value="">선택...</option></select>
+      </div>
+      <div style="margin-bottom:10px"><label class="qf-label">검수 종류</label>
+        <select id="acF_type" class="qf-input">
+          <option value="SAT_internal">🏠 내부 SAT (출하 전)</option>
+          <option value="SAT_customer">👥 고객 SAT (출하 전)</option>
+          <option value="FAT_setup">⚙️ FAT Setup (현장)</option>
+          <option value="FAT_test">🔍 FAT 진행 (현장 검증)</option>
+          <option value="FAT_complete">✅ FAT 완료</option>
+          <option value="delivery_confirm">📋 납품확인 (부품)</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div><label class="qf-label">검수일</label><input type="date" id="acF_date" class="qf-input"></div>
+        <div><label class="qf-label">장소</label><input type="text" id="acF_location" class="qf-input" placeholder="ENJET 또는 고객사 명"></div>
+      </div>
+      <div style="margin-bottom:10px"><label class="qf-label">참석자</label><input type="text" id="acF_attendees" class="qf-input" placeholder="ENJET 측 + 고객사 측"></div>
+      <div style="margin-bottom:10px"><label class="qf-label">결과</label>
+        <select id="acF_result" class="qf-input">
+          <option value="진행중">🔄 진행중</option>
+          <option value="합격">✅ 합격</option>
+          <option value="조건부합격">⚠️ 조건부 합격</option>
+          <option value="불합격">❌ 불합격 (개조/재시험 필요)</option>
+        </select>
+      </div>
+      <div style="margin-bottom:10px"><label class="qf-label">개조/수정 필요 사항</label><textarea id="acF_modifications" class="qf-input" rows="3" placeholder="FAT 중 발견된 수정 사항"></textarea></div>
+      <div style="margin-bottom:10px"><label class="qf-label">검수 보고서 URL</label><input type="url" id="acF_reportUrl" class="qf-input"></div>
+      
+      <div style="background:#fef3c7;padding:10px;border-radius:8px;margin-top:14px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+          <input type="checkbox" id="acF_triggerInvoice">
+          💰 합격 시 영업에 세금계산서 발행 알림 (중도금/잔금)
+        </label>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn outline" onclick="closeModal('modalAcceptance')">취소</button>
+      <button class="btn" onclick="saveAcceptance()">💾 저장</button>
     </div>
   </div>
 </div>
@@ -905,6 +1170,13 @@ const SALES_TODOS_PATH = `${SALES_FOLDER}/sales-todos.json`;       // 영업 Tod
 const ES_MEETINGS_PATH = `${ES_BASE}/es-meetings.json`;            // ES 내부 회의록
 const ES_DOCS_SYNC_PATH = `${ES_BASE}/es-docs-sync.json`;          // 자료 동기화 로그
 const APPROVAL_MASTER_PATH = "📋 전자결재/99.Dashboard(real-time)/approval-master.json";
+
+// ━━ Phase 4 확장: 제조/출하 ━━
+const ES_REAL_BOM_PATH = `${ES_BASE}/es-real-bom.json`;            // 실제 BOM (설계 후)
+const ES_MFG_STATUS_PATH = `${ES_BASE}/es-mfg-status.json`;        // 제조 진행 상태
+const ES_ACCEPTANCE_PATH = `${ES_BASE}/es-acceptance.json`;        // SAT/FAT 검수
+const ES_INBOUND_PATH = `${ES_BASE}/es-inbound.json`;              // 입고/출고
+const SALES_INVOICE_TRIGGERS_PATH = `${SALES_FOLDER}/invoice-triggers.json`;  // 세금계산서 트리거
 
 // 부서/팀 표준
 const ES_TEAMS = {
@@ -1226,7 +1498,9 @@ function go(tab) {
   if (tab === "se") renderSETab();
   if (tab === "pe") renderPETab();
   if (tab === "ae") renderAETab();
+  if (tab === "manufacturing") renderManufacturingTab();
   if (tab === "docs") renderDocsTab();
+  if (tab === "kpi") renderKPITab();
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2235,6 +2509,35 @@ async function sendToSales() {
       } catch (e) {
         console.warn("채널 게시 실패 (계속 진행):", e);
       }
+      
+      // 🔔 영업의 ES 요청을 완료 처리
+      try {
+        const quoteReqsPath = `${ES_BASE}/es-quote-requests.json`;
+        const reqData = await fetchJson(quoteReqsPath);
+        const reqs = reqData?.requests || [];
+        const matchReq = reqs.find(r => r.projectCode === projectCode && r.status === "pending");
+        if (matchReq) {
+          matchReq.status = "completed";
+          matchReq.completedAt = new Date().toISOString();
+          matchReq.completedBy = userEmail;
+          matchReq.esQuoteId = esQuotes[idx].id;
+          await saveJson(quoteReqsPath, { requests: reqs, lastUpdate: new Date().toISOString() });
+          
+          // 영업 모듈의 영업활동에도 완료 마킹
+          const salesData = await fetchJson(SALES_ACTIVITIES_PATH);
+          const salesList = Array.isArray(salesData) ? salesData : (salesData?.activities || []);
+          const matchAct = salesList.find(a => a.id === matchReq.salesActivityId);
+          if (matchAct) {
+            matchAct.esQuoteCompleted = true;
+            matchAct.esQuoteCompletedAt = new Date().toISOString();
+            if (Array.isArray(salesData)) {
+              await saveJson(SALES_ACTIVITIES_PATH, salesData);
+            } else {
+              await saveJson(SALES_ACTIVITIES_PATH, salesData);
+            }
+          }
+        }
+      } catch (e) { console.warn("ES 요청 완료 처리 실패:", e); }
     }
     
     toast(`✅ 영업팀에 송부 완료 + Teams 채널 게시`, "success");
@@ -3446,12 +3749,8 @@ async function submitApproval() {
   
   if (!confirm(`전자결재(구매품의서)를 상신하시겠습니까?\n\n견적: ${quote.id}\n프로젝트: ${quote.projectCode}\nBOM 합계: ₩${formatMoney(quote.summary?.bomTotal || 0)}\nES 산출 원가: ₩${formatMoney(quote.summary?.total || 0)}\n\n결재 완료 시 구매 모듈에 자동 등록됩니다.`)) return;
   
-  // 결재선 (예시) - 실제로는 전자결재 v1.5의 결재선 설정 활용
-  const approvalLine = [
-    { email: userEmail, name: userName, role: "기안자", step: 0, action: "기안" },
-    { email: "purchase-mgr@enjet.co.kr", name: "구매팀장", role: "검토", step: 1 },
-    { email: "ceo@enjet.co.kr", name: "대표이사", role: "결재", step: 2 }
-  ];
+  // 자동 결재선 생성 (HR 모듈 연동)
+  const approvalLine = await buildApprovalLine(userEmail);
   
   // 전자결재 데이터 생성 (전자결재 v1.5 형식)
   const approval = {
@@ -3541,6 +3840,995 @@ function getQuoteStatusBadgeWithApproval(status) {
   if (status === "approval_pending") return '<span class="badge badge-purple">⚖️ 결재중</span>';
   if (status === "approval_completed") return '<span class="badge badge-green">✅ 결재완료</span>';
   return getQuoteStatusBadge(status);
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Phase 4 확장: 제조/출하 (Stage 8-11)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+let realBoms = [];
+let mfgStatuses = [];
+let acceptances = [];
+
+async function renderManufacturingTab() {
+  // 데이터 로드
+  const [rb, ms, ac] = await Promise.all([
+    fetchJson(ES_REAL_BOM_PATH),
+    fetchJson(ES_MFG_STATUS_PATH),
+    fetchJson(ES_ACCEPTANCE_PATH)
+  ]);
+  realBoms = rb?.boms || rb?.items || [];
+  mfgStatuses = ms?.statuses || ms?.items || [];
+  acceptances = ac?.acceptances || ac?.items || [];
+  
+  // KPI
+  const inProgress = mfgStatuses.filter(m => m.status === "진행중").length;
+  const inbound = mfgStatuses.filter(m => m.stage === "입고대기" || m.stage === "기구조립").length;
+  const satWaiting = acceptances.filter(a => (a.type === "SAT_internal" || a.type === "SAT_customer") && a.result === "진행중").length;
+  const fatActive = acceptances.filter(a => a.type === "FAT_setup" || a.type === "FAT_test").length;
+  
+  $("mfgKpiInProgress").innerHTML = `${inProgress}<span class="kpi-unit">건</span>`;
+  $("mfgKpiInbound").innerHTML = `${inbound}<span class="kpi-unit">건</span>`;
+  $("mfgKpiSat").innerHTML = `${satWaiting}<span class="kpi-unit">건</span>`;
+  $("mfgKpiFat").innerHTML = `${fatActive}<span class="kpi-unit">건</span>`;
+  
+  // 실제 BOM 목록
+  if (realBoms.length === 0) {
+    $("realBomList").innerHTML = `<div style="padding:30px;text-align:center;color:var(--t3);background:var(--bg3);border-radius:8px"><div style="font-size:32px;opacity:0.4;margin-bottom:8px">📐</div><div style="font-weight:700">등록된 실제 BOM이 없습니다</div><div style="font-size:12px;margin-top:4px">설계 완료 후 [+ 실제 BOM 등록] 으로 추가</div></div>`;
+  } else {
+    $("realBomList").innerHTML = `<div class="tbl-wrap"><table>
+      <thead><tr><th>프로젝트</th><th>버전</th><th>완료일</th><th class="right">부품</th><th class="right">변경 부품</th><th class="center">상태</th><th class="center">조치</th></tr></thead>
+      <tbody>${realBoms.map(b => `
+        <tr>
+          <td style="font-family:monospace;font-size:11px">${b.projectCode || "-"}</td>
+          <td>${b.version || "v1.0"}</td>
+          <td>${formatDate(b.completedDate)}</td>
+          <td class="right">${(b.items || []).length}</td>
+          <td class="right">${b.changedItems || 0}</td>
+          <td class="center">${b.status === "확정" ? '<span class="badge badge-green">✅ 확정</span>' : '<span class="badge badge-orange">📝 임시</span>'}</td>
+          <td class="center">
+            ${b.changedItems > 0 && b.status === "확정" ? `<button class="btn xs" onclick="reorderChangedParts('${b.id}')" title="변경분 구매 재발주">🛒 재발주</button>` : '-'}
+          </td>
+        </tr>
+      `).join("")}</tbody></table></div>`;
+  }
+  
+  // 입고/출고
+  renderInbound();
+  
+  // 제조 상태
+  if (mfgStatuses.length === 0) {
+    $("mfgStatusList").innerHTML = `<div style="padding:30px;text-align:center;color:var(--t3);background:var(--bg3);border-radius:8px"><div style="font-size:32px;opacity:0.4;margin-bottom:8px">⚙️</div><div style="font-weight:700">제조 진행 데이터가 없습니다</div></div>`;
+  } else {
+    $("mfgStatusList").innerHTML = `<div class="tbl-wrap"><table>
+      <thead><tr><th>프로젝트</th><th>단계</th><th>담당</th><th>시작일</th><th>완료일</th><th class="right">진행률</th><th class="center">상태</th></tr></thead>
+      <tbody>${mfgStatuses.map(m => `
+        <tr>
+          <td style="font-family:monospace;font-size:11px">${m.projectCode || "-"}</td>
+          <td>${getStageBadge(m.stage)}</td>
+          <td>${m.owner || "-"}</td>
+          <td>${formatDate(m.startDate)}</td>
+          <td>${formatDate(m.endDate)}</td>
+          <td class="right">${m.progress || 0}%</td>
+          <td class="center">${getStatusBadge(m.status)}</td>
+        </tr>
+      `).join("")}</tbody></table></div>`;
+  }
+  
+  // SAT/FAT
+  if (acceptances.length === 0) {
+    $("acceptanceList").innerHTML = `<div style="padding:30px;text-align:center;color:var(--t3);background:var(--bg3);border-radius:8px"><div style="font-size:32px;opacity:0.4;margin-bottom:8px">✅</div><div style="font-weight:700">검수 데이터가 없습니다</div></div>`;
+  } else {
+    $("acceptanceList").innerHTML = `<div class="tbl-wrap"><table>
+      <thead><tr><th>프로젝트</th><th>종류</th><th>검수일</th><th>장소</th><th class="center">결과</th><th>비고</th></tr></thead>
+      <tbody>${acceptances.map(a => `
+        <tr>
+          <td style="font-family:monospace;font-size:11px">${a.projectCode || "-"}</td>
+          <td>${getAcceptanceBadge(a.type)}</td>
+          <td>${formatDate(a.date)}</td>
+          <td>${a.location || "-"}</td>
+          <td class="center">${getResultBadge(a.result)}</td>
+          <td style="font-size:11px;color:var(--t3);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.modifications || "-"}</td>
+        </tr>
+      `).join("")}</tbody></table></div>`;
+  }
+}
+
+function getStageBadge(stage) {
+  const map = {
+    "기구조립": '<span class="badge badge-blue">🔧 기구조립</span>',
+    "전장조립": '<span class="badge badge-purple">⚡ 전장조립</span>',
+    "배선": '<span class="badge badge-blue">🔌 배선</span>',
+    "조립완료": '<span class="badge badge-green">✅ 조립완료</span>',
+    "디버깅": '<span class="badge badge-orange">🐛 디버깅</span>',
+    "내부테스트": '<span class="badge badge-purple">🧪 내부테스트</span>',
+    "포장": '<span class="badge badge-blue">📦 포장</span>',
+    "출하대기": '<span class="badge badge-orange">🚚 출하대기</span>'
+  };
+  return map[stage] || `<span class="badge badge-gray">${stage}</span>`;
+}
+
+function getAcceptanceBadge(type) {
+  const map = {
+    "SAT_internal": '<span class="badge badge-blue">🏠 내부 SAT</span>',
+    "SAT_customer": '<span class="badge badge-purple">👥 고객 SAT</span>',
+    "FAT_setup": '<span class="badge badge-orange">⚙️ FAT Setup</span>',
+    "FAT_test": '<span class="badge badge-purple">🔍 FAT 진행</span>',
+    "FAT_complete": '<span class="badge badge-green">✅ FAT 완료</span>',
+    "delivery_confirm": '<span class="badge badge-blue">📋 납품확인</span>'
+  };
+  return map[type] || `<span class="badge badge-gray">${type}</span>`;
+}
+
+function getResultBadge(result) {
+  if (result === "합격") return '<span class="badge badge-green">✅ 합격</span>';
+  if (result === "조건부합격") return '<span class="badge badge-orange">⚠️ 조건부</span>';
+  if (result === "불합격") return '<span class="badge badge-red">❌ 불합격</span>';
+  return '<span class="badge badge-blue">🔄 진행중</span>';
+}
+
+// ━━ 실제 BOM 모달 ━━
+let currentRealBomItems = [];
+
+function openRealBomModal() {
+  currentRealBomItems = [];
+  populateProjectSelectFor("rbF_projectCode");
+  $("rbF_version").value = "v1.0";
+  $("rbF_completedDate").value = new Date().toISOString().substring(0,10);
+  $("rbF_changeNotes").value = "";
+  renderRealBomRows();
+  $("modalRealBom").classList.add("on");
+}
+
+function renderRealBomRows() {
+  const html = currentRealBomItems.length === 0 ? 
+    `<div style="text-align:center;color:var(--t3);padding:20px;font-size:12px">아직 부품이 없습니다. [+ 부품 추가] 또는 [📥 예상 BOM 복사]</div>` :
+    `<table style="width:100%;font-size:12px">
+      <thead><tr><th>품번</th><th>품명</th><th>수량</th><th>단가</th><th>변경</th><th></th></tr></thead>
+      <tbody>${currentRealBomItems.map((item, i) => `
+        <tr>
+          <td><input type="text" value="${item.partNo || ''}" oninput="currentRealBomItems[${i}].partNo=this.value" style="width:100%;padding:4px;border:1px solid var(--border);border-radius:4px"></td>
+          <td><input type="text" value="${item.name || ''}" oninput="currentRealBomItems[${i}].name=this.value" style="width:100%;padding:4px;border:1px solid var(--border);border-radius:4px"></td>
+          <td><input type="number" value="${item.qty || 1}" oninput="currentRealBomItems[${i}].qty=this.value" style="width:60px;padding:4px;border:1px solid var(--border);border-radius:4px;text-align:right"></td>
+          <td><input type="number" value="${item.unitPrice || 0}" oninput="currentRealBomItems[${i}].unitPrice=this.value" style="width:80px;padding:4px;border:1px solid var(--border);border-radius:4px;text-align:right"></td>
+          <td style="text-align:center">${item.changed ? '<span class="badge badge-orange">🔄</span>' : '-'}</td>
+          <td><button onclick="removeRealBomRow(${i})" style="padding:2px 8px;background:#fee;color:#c00;border:none;border-radius:4px;cursor:pointer">×</button></td>
+        </tr>
+      `).join("")}</tbody>
+    </table>`;
+  $("realBomItems").innerHTML = html;
+}
+
+function addRealBomRow() {
+  currentRealBomItems.push({ partNo: "", name: "", qty: 1, unitPrice: 0, changed: false });
+  renderRealBomRows();
+}
+
+function removeRealBomRow(i) {
+  currentRealBomItems.splice(i, 1);
+  renderRealBomRows();
+}
+
+async function loadEstimatedBom() {
+  const projectCode = $("rbF_projectCode").value;
+  if (!projectCode) { toast("프로젝트를 먼저 선택하세요", "error"); return; }
+  
+  // 해당 프로젝트의 예상 BOM (es-quotes.json) 가져오기
+  const quote = esQuotes.find(q => q.projectCode === projectCode);
+  if (!quote || !quote.bomItems) {
+    toast("예상 BOM이 없습니다", "warn");
+    return;
+  }
+  
+  currentRealBomItems = quote.bomItems.map(b => ({
+    partNo: b.partNo || "",
+    name: b.name || "",
+    spec: b.spec || "",
+    qty: b.qty || 1,
+    unit: b.unit || "EA",
+    unitPrice: b.unitPrice || 0,
+    supplier: b.supplier || "",
+    changed: false,
+    originalFromEstimate: true
+  }));
+  renderRealBomRows();
+  toast(`✅ 예상 BOM ${currentRealBomItems.length}건 복사됨`, "success");
+}
+
+async function saveRealBom(confirmed) {
+  const projectCode = $("rbF_projectCode").value;
+  if (!projectCode) { toast("프로젝트를 선택하세요", "error"); return; }
+  if (currentRealBomItems.length === 0) { toast("부품을 추가하세요", "error"); return; }
+  
+  // 예상 BOM과 비교하여 변경분 감지
+  const quote = esQuotes.find(q => q.projectCode === projectCode);
+  let changedCount = 0;
+  if (quote && quote.bomItems) {
+    currentRealBomItems.forEach(item => {
+      const estimated = quote.bomItems.find(e => e.partNo === item.partNo);
+      if (!estimated) {
+        item.changed = true;
+        item.changeType = "신규";
+        changedCount++;
+      } else if (parseFloat(estimated.qty) !== parseFloat(item.qty) || 
+                 parseFloat(estimated.unitPrice) !== parseFloat(item.unitPrice)) {
+        item.changed = true;
+        item.changeType = "수량/단가 변경";
+        item.originalQty = estimated.qty;
+        item.originalPrice = estimated.unitPrice;
+        changedCount++;
+      }
+    });
+  }
+  
+  const realBom = {
+    id: `RBOM-${Date.now()}`,
+    projectCode,
+    version: $("rbF_version").value,
+    completedDate: $("rbF_completedDate").value,
+    items: currentRealBomItems,
+    changedItems: changedCount,
+    changeNotes: $("rbF_changeNotes").value,
+    status: confirmed ? "확정" : "임시",
+    createdBy: userEmail,
+    createdAt: new Date().toISOString()
+  };
+  
+  realBoms.unshift(realBom);
+  
+  try {
+    await saveJson(ES_REAL_BOM_PATH, { boms: realBoms, lastUpdate: new Date().toISOString() });
+    
+    let msg = `✅ 실제 BOM ${confirmed ? '확정' : '임시 저장'}\n부품: ${currentRealBomItems.length}건\n변경: ${changedCount}건`;
+    
+    // Teams 채널 게시
+    if (confirmed) {
+      const channel = channelMap[projectCode];
+      if (channel && channel.status === "active") {
+        try {
+          await postChannelMessage(channel.channelId, `
+            <div>
+              <p><b>📐 실제 BOM 확정 (${$("rbF_version").value})</b></p>
+              <table border="1" cellpadding="6" style="border-collapse:collapse;font-size:12px">
+                <tr><td style="background:#f5f5f5"><b>총 부품</b></td><td>${currentRealBomItems.length}건</td></tr>
+                <tr><td style="background:#f5f5f5"><b>변경 부품</b></td><td>${changedCount}건 (예상 BOM 대비)</td></tr>
+                <tr><td style="background:#f5f5f5"><b>설계 완료</b></td><td>${$("rbF_completedDate").value}</td></tr>
+              </table>
+              ${changedCount > 0 ? `<p style="color:#d97706"><b>⚠️ 변경분 ${changedCount}건은 구매에 재발주 필요</b></p>` : ''}
+            </div>
+          `);
+        } catch (e) {}
+      }
+      
+      if (changedCount > 0) {
+        msg += `\n\n💡 [🛒 재발주] 버튼으로 변경분만 구매에 자동 전달 가능`;
+      }
+    }
+    
+    toast(msg, "success");
+    closeModal("modalRealBom");
+    renderManufacturingTab();
+  } catch (e) {
+    toast("저장 실패: " + e.message, "error");
+  }
+}
+
+// 변경분 구매에 재발주
+async function reorderChangedParts(realBomId) {
+  const rbom = realBoms.find(r => r.id === realBomId);
+  if (!rbom) return;
+  
+  const changedItems = (rbom.items || []).filter(i => i.changed);
+  if (changedItems.length === 0) {
+    toast("변경된 부품이 없습니다", "warn");
+    return;
+  }
+  
+  if (!confirm(`변경된 ${changedItems.length}건을 구매 모듈에 재발주하시겠습니까?\n\n프로젝트: ${rbom.projectCode}\n\n구매에서 추가 견적 → 발주 진행이 시작됩니다.`)) return;
+  
+  try {
+    // 구매 모듈의 pr-master.json에 추가
+    const prMasterPath = "🏭 구매/99.Dashboard(real-time)/pr-master.json";
+    const existing = await fetchJson(prMasterPath);
+    const prs = existing?.items || existing || [];
+    
+    const newPR = {
+      id: `PR-RBOM-${Date.now()}`,
+      prNo: `PR-${rbom.projectCode}-CHG`,
+      date: new Date().toISOString().substring(0,10),
+      projectCode: rbom.projectCode,
+      items: changedItems.map(i => ({
+        partNo: i.partNo,
+        name: i.name,
+        spec: i.spec,
+        qty: i.qty,
+        unit: i.unit,
+        unitPrice: i.unitPrice,
+        supplier: i.supplier,
+        changeType: i.changeType
+      })),
+      totalAmount: changedItems.reduce((s, i) => s + (parseFloat(i.qty) || 0) * (parseFloat(i.unitPrice) || 0), 0),
+      source: "es_real_bom_change",
+      esRealBomId: rbom.id,
+      specialNote: `실제 BOM ${rbom.version} 변경분 (${rbom.changeNotes || ''})`,
+      status: "변경발주",
+      autoCreatedAt: new Date().toISOString()
+    };
+    
+    // pr-master.json 구조에 맞게 저장
+    if (Array.isArray(existing)) {
+      existing.unshift(newPR);
+      await saveJson(prMasterPath, existing);
+    } else {
+      prs.unshift(newPR);
+      await saveJson(prMasterPath, { items: prs, lastUpdate: new Date().toISOString() });
+    }
+    
+    // 채널 게시
+    const channel = channelMap[rbom.projectCode];
+    if (channel && channel.status === "active") {
+      try {
+        await postChannelMessage(channel.channelId, `
+          <div>
+            <p><b>🛒 변경분 구매 재발주</b></p>
+            <p>실제 BOM 확정 후 변경된 ${changedItems.length}건을 구매팀에 자동 전달했습니다.</p>
+            <p><b>PR 번호:</b> ${newPR.prNo}<br>
+               <b>금액:</b> ${(newPR.totalAmount).toLocaleString()}원</p>
+          </div>
+        `);
+      } catch (e) {}
+    }
+    
+    toast(`✅ ${changedItems.length}건 구매 재발주 완료\n${newPR.prNo}`, "success");
+  } catch (e) {
+    toast("재발주 실패: " + e.message, "error");
+  }
+}
+
+// ━━ 입고/출고 트래킹 ━━
+async function renderInbound() {
+  // 구매 모듈의 발주서/입고 데이터에서 ES 프로젝트 관련만 추출
+  const purchaseDeliveryPath = "🏭 구매/99.Dashboard(real-time)/purchase-delivery-db.json";
+  const deliveries = await fetchJson(purchaseDeliveryPath);
+  const items = deliveries?.items || deliveries || [];
+  
+  // 현재 ES 프로젝트의 입고 정보만
+  const projectCodes = new Set(esProjects.map(p => p.salesCode || p.id));
+  const relevant = (Array.isArray(items) ? items : [])
+    .filter(d => projectCodes.has(d.projectCode || d.pjcode))
+    .slice(0, 20);
+  
+  if (relevant.length === 0) {
+    $("inboundList").innerHTML = `<div style="padding:30px;text-align:center;color:var(--t3);background:var(--bg3);border-radius:8px"><div style="font-size:32px;opacity:0.4;margin-bottom:8px">🚚</div><div style="font-weight:700">입고 데이터 없음</div><div style="font-size:12px;margin-top:4px">구매 모듈에서 입고 등록 시 여기 표시됩니다</div></div>`;
+    return;
+  }
+  
+  $("inboundList").innerHTML = `<div class="tbl-wrap"><table>
+    <thead><tr><th>프로젝트</th><th>품목</th><th>수량</th><th>입고일</th><th class="center">상태</th><th class="center">ES출고</th></tr></thead>
+    <tbody>${relevant.map(d => `
+      <tr>
+        <td style="font-family:monospace;font-size:11px">${d.projectCode || d.pjcode || "-"}</td>
+        <td>${d.item || d.itemName || "-"}</td>
+        <td class="right">${d.qty || "-"}</td>
+        <td>${formatDate(d.deliveryDate || d.date)}</td>
+        <td class="center">${d.status === "입고완료" ? '<span class="badge badge-green">✅ 입고완료</span>' : `<span class="badge badge-orange">${d.status || "대기"}</span>`}</td>
+        <td class="center">
+          ${d.status === "입고완료" && !d.esReleased ? `<button class="btn xs" onclick="markESReleased('${d.id}')">🚀 ES출고</button>` : (d.esReleased ? '<span class="badge badge-purple">출고완료</span>' : '-')}
+        </td>
+      </tr>
+    `).join("")}</tbody></table></div>`;
+}
+
+async function markESReleased(deliveryId) {
+  if (!confirm("이 입고 부품을 ES 사업부로 출고 처리하시겠습니까?\n장비 제조에 사용됩니다.")) return;
+  
+  try {
+    const path = "🏭 구매/99.Dashboard(real-time)/purchase-delivery-db.json";
+    const data = await fetchJson(path);
+    const items = data?.items || data || [];
+    const list = Array.isArray(items) ? items : [];
+    
+    const target = list.find(d => d.id === deliveryId);
+    if (target) {
+      target.esReleased = true;
+      target.esReleasedAt = new Date().toISOString();
+      target.esReleasedBy = userEmail;
+      
+      if (Array.isArray(data)) {
+        await saveJson(path, data);
+      } else {
+        await saveJson(path, { items: list, lastUpdate: new Date().toISOString() });
+      }
+      
+      toast("✅ ES 출고 완료", "success");
+      renderInbound();
+    }
+  } catch (e) {
+    toast("출고 처리 실패: " + e.message, "error");
+  }
+}
+
+// ━━ 제조 상태 모달 ━━
+function openMfgStatusModal() {
+  populateProjectSelectFor("msF_projectCode");
+  $("msF_stage").value = "기구조립";
+  $("msF_startDate").value = new Date().toISOString().substring(0,10);
+  $("msF_endDate").value = "";
+  $("msF_owner").value = userName || "";
+  $("msF_progress").value = "0";
+  $("msF_status").value = "진행중";
+  $("msF_note").value = "";
+  $("modalMfgStatus").classList.add("on");
+}
+
+async function saveMfgStatus() {
+  const projectCode = $("msF_projectCode").value;
+  if (!projectCode) { toast("프로젝트를 선택하세요", "error"); return; }
+  
+  const data = {
+    id: `MFG-${Date.now()}`,
+    projectCode,
+    stage: $("msF_stage").value,
+    startDate: $("msF_startDate").value,
+    endDate: $("msF_endDate").value,
+    owner: $("msF_owner").value,
+    progress: parseInt($("msF_progress").value) || 0,
+    status: $("msF_status").value,
+    note: $("msF_note").value,
+    createdBy: userEmail,
+    createdAt: new Date().toISOString()
+  };
+  
+  mfgStatuses.unshift(data);
+  
+  try {
+    await saveJson(ES_MFG_STATUS_PATH, { statuses: mfgStatuses, lastUpdate: new Date().toISOString() });
+    
+    // 완료 시 채널 게시
+    if (data.status === "완료") {
+      const channel = channelMap[projectCode];
+      if (channel && channel.status === "active") {
+        try {
+          await postChannelMessage(channel.channelId, `
+            <div>
+              <p><b>⚙️ 제조 단계 완료: ${data.stage}</b></p>
+              <table border="1" cellpadding="6" style="border-collapse:collapse;font-size:12px">
+                <tr><td style="background:#f5f5f5"><b>단계</b></td><td>${data.stage}</td></tr>
+                <tr><td style="background:#f5f5f5"><b>담당</b></td><td>${data.owner}</td></tr>
+                <tr><td style="background:#f5f5f5"><b>완료일</b></td><td>${data.endDate || formatDate(data.createdAt)}</td></tr>
+              </table>
+            </div>
+          `);
+        } catch (e) {}
+      }
+    }
+    
+    toast("✅ 제조 진행 저장", "success");
+    closeModal("modalMfgStatus");
+    renderManufacturingTab();
+  } catch (e) {
+    toast("저장 실패: " + e.message, "error");
+  }
+}
+
+// ━━ SAT/FAT 검수 모달 ━━
+function openAcceptanceModal() {
+  populateProjectSelectFor("acF_projectCode");
+  $("acF_type").value = "SAT_internal";
+  $("acF_date").value = new Date().toISOString().substring(0,10);
+  $("acF_location").value = "";
+  $("acF_attendees").value = "";
+  $("acF_result").value = "진행중";
+  $("acF_modifications").value = "";
+  $("acF_reportUrl").value = "";
+  $("acF_triggerInvoice").checked = false;
+  $("modalAcceptance").classList.add("on");
+}
+
+async function saveAcceptance() {
+  const projectCode = $("acF_projectCode").value;
+  if (!projectCode) { toast("프로젝트를 선택하세요", "error"); return; }
+  
+  const data = {
+    id: `AC-${Date.now()}`,
+    projectCode,
+    type: $("acF_type").value,
+    date: $("acF_date").value,
+    location: $("acF_location").value,
+    attendees: $("acF_attendees").value,
+    result: $("acF_result").value,
+    modifications: $("acF_modifications").value,
+    reportUrl: $("acF_reportUrl").value,
+    triggerInvoice: $("acF_triggerInvoice").checked,
+    createdBy: userEmail,
+    createdAt: new Date().toISOString()
+  };
+  
+  acceptances.unshift(data);
+  
+  try {
+    await saveJson(ES_ACCEPTANCE_PATH, { acceptances, lastUpdate: new Date().toISOString() });
+    
+    // 합격 + 세금계산서 트리거 체크 시 영업에 알림
+    if (data.result === "합격" && data.triggerInvoice) {
+      await triggerInvoiceNotification(projectCode, data.type);
+    }
+    
+    // 채널 게시
+    const channel = channelMap[projectCode];
+    if (channel && channel.status === "active") {
+      try {
+        const typeLabel = {
+          "SAT_internal": "🏠 내부 SAT", "SAT_customer": "👥 고객 SAT",
+          "FAT_setup": "⚙️ FAT Setup", "FAT_test": "🔍 FAT 진행",
+          "FAT_complete": "✅ FAT 완료", "delivery_confirm": "📋 납품확인"
+        }[data.type] || data.type;
+        
+        await postChannelMessage(channel.channelId, `
+          <div>
+            <p><b>${typeLabel} - ${data.result}</b></p>
+            <table border="1" cellpadding="6" style="border-collapse:collapse;font-size:12px">
+              <tr><td style="background:#f5f5f5"><b>검수일</b></td><td>${data.date}</td></tr>
+              <tr><td style="background:#f5f5f5"><b>장소</b></td><td>${data.location}</td></tr>
+              <tr><td style="background:#f5f5f5"><b>결과</b></td><td><b>${data.result}</b></td></tr>
+              ${data.modifications ? `<tr><td style="background:#fef3c7"><b>수정사항</b></td><td style="white-space:pre-wrap">${data.modifications}</td></tr>` : ""}
+            </table>
+            ${data.triggerInvoice && data.result === "합격" ? '<p style="color:#059669"><b>💰 영업에 세금계산서 발행 알림 자동 전달</b></p>' : ''}
+          </div>
+        `);
+      } catch (e) {}
+    }
+    
+    toast("✅ 검수 등록 완료", "success");
+    closeModal("modalAcceptance");
+    renderManufacturingTab();
+  } catch (e) {
+    toast("저장 실패: " + e.message, "error");
+  }
+}
+
+// 영업에 세금계산서 발행 알림 트리거
+async function triggerInvoiceNotification(projectCode, acceptanceType) {
+  try {
+    let triggerType = "interim";  // 중도금
+    if (acceptanceType === "FAT_complete" || acceptanceType === "delivery_confirm") {
+      triggerType = "balance";  // 잔금
+    } else if (acceptanceType === "SAT_internal" || acceptanceType === "SAT_customer") {
+      triggerType = "interim";  // 중도금 (출하시)
+    }
+    
+    const existing = await fetchJson(SALES_INVOICE_TRIGGERS_PATH);
+    const triggers = existing?.triggers || [];
+    
+    triggers.unshift({
+      id: `INV-TRG-${Date.now()}`,
+      projectCode,
+      triggerType,  // deposit/interim/balance
+      acceptanceType,
+      triggeredBy: userEmail,
+      triggeredAt: new Date().toISOString(),
+      processed: false,
+      message: `${projectCode} - ${acceptanceType} 합격 → 세금계산서 발행 요청`
+    });
+    
+    await saveJson(SALES_INVOICE_TRIGGERS_PATH, { triggers, lastUpdate: new Date().toISOString() });
+    console.log("[ES] 세금계산서 트리거 영업에 전달");
+  } catch (e) {
+    console.warn("세금계산서 트리거 실패:", e);
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// KPI 탭 - 종합 분석 리포트
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async function renderKPITab() {
+  // 팀별 가동률 계산
+  const activeProjects = esProjects.filter(p => 
+    p.status === "진행중" || p.status === "신규" || !p.status
+  );
+  
+  // 팀별 프로젝트 수
+  const seCount = activeProjects.filter(p => (p.teams || ["SE"]).includes("SE")).length;
+  const peCount = activeProjects.filter(p => (p.teams || []).includes("PE")).length;
+  const aeCount = activeProjects.filter(p => (p.teams || []).includes("AE")).length;
+  
+  // 팀 정원 가정 (실제로는 HR 데이터)
+  const SE_SIZE = 6, PE_SIZE = 6, AE_SIZE = 6;
+  
+  const seUtil = Math.min(100, Math.round((seCount / SE_SIZE) * 50));  // 1명당 2개 풀가동
+  const peUtil = Math.min(100, Math.round((peCount / PE_SIZE) * 50));
+  const aeUtil = Math.min(100, Math.round((aeCount / AE_SIZE) * 50));
+  
+  $("kpiSeUtil").innerHTML = `${seUtil}<span class="kpi-unit">%</span>`;
+  $("kpiPeUtil").innerHTML = `${peUtil}<span class="kpi-unit">%</span>`;
+  $("kpiAeUtil").innerHTML = `${aeUtil}<span class="kpi-unit">%</span>`;
+  $("kpiQuoteTotal").innerHTML = `${esQuotes.length}<span class="kpi-unit">건</span>`;
+  
+  // 월별 견적 추이
+  renderMonthlyQuoteChart();
+  
+  // 팀별 프로젝트 분포
+  renderTeamProjectDistribution(seCount, peCount, aeCount);
+  
+  // 처리 시간 분석
+  renderProcessingTimeAnalysis();
+  
+  // 검수 합격률
+  renderAcceptanceRate();
+}
+
+function renderMonthlyQuoteChart() {
+  // 최근 6개월 견적 데이터 집계
+  const now = new Date();
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = d.toISOString().substring(0, 7);
+    months.push({ key, label: `${d.getMonth() + 1}월`, count: 0 });
+  }
+  
+  esQuotes.forEach(q => {
+    const month = (q.createdAt || "").substring(0, 7);
+    const target = months.find(m => m.key === month);
+    if (target) target.count++;
+  });
+  
+  const maxCount = Math.max(1, ...months.map(m => m.count));
+  
+  $("quoteMonthlyChart").innerHTML = `
+    <div style="display:flex;align-items:flex-end;gap:12px;height:200px;padding:10px 0">
+      ${months.map(m => `
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px">
+          <div style="font-size:11px;font-weight:700;color:var(--p)">${m.count}</div>
+          <div style="width:100%;background:linear-gradient(to top, var(--p), #60a5fa);border-radius:6px 6px 0 0;height:${(m.count / maxCount * 160)}px;min-height:4px"></div>
+          <div style="font-size:11px;color:var(--t3)">${m.label}</div>
+        </div>
+      `).join("")}
+    </div>
+    <div style="font-size:11px;color:var(--t3);text-align:center;margin-top:8px">
+      총 ${months.reduce((s, m) => s + m.count, 0)}건 (최근 6개월) · 월평균 ${(months.reduce((s, m) => s + m.count, 0) / 6).toFixed(1)}건
+    </div>
+  `;
+}
+
+function renderTeamProjectDistribution(se, pe, ae) {
+  const total = se + pe + ae || 1;
+  $("teamProjectDist").innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+      <div style="text-align:center">
+        <div style="font-size:13px;font-weight:700;color:var(--t2);margin-bottom:8px">🔧 SE팀</div>
+        <div style="width:120px;height:120px;border-radius:50%;background:conic-gradient(var(--p) ${se/total*360}deg, var(--bg3) 0);margin:0 auto;display:flex;align-items:center;justify-content:center">
+          <div style="background:#fff;width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-direction:column">
+            <div style="font-size:24px;font-weight:900;color:var(--p)">${se}</div>
+            <div style="font-size:11px;color:var(--t3)">${Math.round(se/total*100)}%</div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:13px;font-weight:700;color:var(--t2);margin-bottom:8px">🧪 PE팀</div>
+        <div style="width:120px;height:120px;border-radius:50%;background:conic-gradient(#10b981 ${pe/total*360}deg, var(--bg3) 0);margin:0 auto;display:flex;align-items:center;justify-content:center">
+          <div style="background:#fff;width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-direction:column">
+            <div style="font-size:24px;font-weight:900;color:#10b981">${pe}</div>
+            <div style="font-size:11px;color:var(--t3)">${Math.round(pe/total*100)}%</div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:13px;font-weight:700;color:var(--t2);margin-bottom:8px">🛠️ AE팀</div>
+        <div style="width:120px;height:120px;border-radius:50%;background:conic-gradient(#f59e0b ${ae/total*360}deg, var(--bg3) 0);margin:0 auto;display:flex;align-items:center;justify-content:center">
+          <div style="background:#fff;width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-direction:column">
+            <div style="font-size:24px;font-weight:900;color:#f59e0b">${ae}</div>
+            <div style="font-size:11px;color:var(--t3)">${Math.round(ae/total*100)}%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderProcessingTimeAnalysis() {
+  // 견적 작성 평균 소요일 (createdAt → sentAt)
+  const processed = esQuotes.filter(q => q.sentAt && q.createdAt);
+  if (processed.length === 0) {
+    $("processingTimeAnalysis").innerHTML = `<div style="text-align:center;color:var(--t3);padding:20px">아직 분석할 데이터가 부족합니다</div>`;
+    return;
+  }
+  
+  const times = processed.map(q => {
+    const start = new Date(q.createdAt);
+    const end = new Date(q.sentAt);
+    return (end - start) / (1000 * 60 * 60 * 24);
+  });
+  
+  const avg = times.reduce((s, t) => s + t, 0) / times.length;
+  const min = Math.min(...times);
+  const max = Math.max(...times);
+  
+  $("processingTimeAnalysis").innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;text-align:center">
+      <div style="background:var(--bg3);padding:16px;border-radius:8px">
+        <div style="font-size:11px;color:var(--t3);margin-bottom:4px">최단</div>
+        <div style="font-size:24px;font-weight:900;color:#10b981">${min.toFixed(1)}일</div>
+      </div>
+      <div style="background:var(--p);color:#fff;padding:16px;border-radius:8px">
+        <div style="font-size:11px;opacity:0.85;margin-bottom:4px">평균</div>
+        <div style="font-size:24px;font-weight:900">${avg.toFixed(1)}일</div>
+      </div>
+      <div style="background:var(--bg3);padding:16px;border-radius:8px">
+        <div style="font-size:11px;color:var(--t3);margin-bottom:4px">최장</div>
+        <div style="font-size:24px;font-weight:900;color:#dc2626">${max.toFixed(1)}일</div>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--t3);text-align:center;margin-top:10px">분석 대상: ${processed.length}건의 견적</div>
+  `;
+}
+
+function renderAcceptanceRate() {
+  if (!acceptances || acceptances.length === 0) {
+    $("acceptanceRate").innerHTML = `<div style="text-align:center;color:var(--t3);padding:20px">아직 검수 데이터가 없습니다</div>`;
+    return;
+  }
+  
+  const total = acceptances.length;
+  const pass = acceptances.filter(a => a.result === "합격").length;
+  const cond = acceptances.filter(a => a.result === "조건부합격").length;
+  const fail = acceptances.filter(a => a.result === "불합격").length;
+  const pending = acceptances.filter(a => a.result === "진행중").length;
+  
+  const passRate = ((pass / total) * 100).toFixed(1);
+  
+  $("acceptanceRate").innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 2fr;gap:20px;align-items:center">
+      <div style="text-align:center">
+        <div style="font-size:48px;font-weight:900;color:#10b981">${passRate}%</div>
+        <div style="font-size:13px;color:var(--t3)">전체 합격률</div>
+      </div>
+      <div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:80px;font-size:12px;font-weight:700">✅ 합격</div>
+            <div style="flex:1;background:var(--bg3);border-radius:4px;height:24px;position:relative;overflow:hidden">
+              <div style="background:#10b981;height:100%;width:${(pass/total*100)}%;border-radius:4px"></div>
+              <div style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:700">${pass}건</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:80px;font-size:12px;font-weight:700">⚠️ 조건부</div>
+            <div style="flex:1;background:var(--bg3);border-radius:4px;height:24px;position:relative;overflow:hidden">
+              <div style="background:#f59e0b;height:100%;width:${(cond/total*100)}%;border-radius:4px"></div>
+              <div style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:700">${cond}건</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:80px;font-size:12px;font-weight:700">❌ 불합격</div>
+            <div style="flex:1;background:var(--bg3);border-radius:4px;height:24px;position:relative;overflow:hidden">
+              <div style="background:#dc2626;height:100%;width:${(fail/total*100)}%;border-radius:4px"></div>
+              <div style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:700">${fail}건</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:80px;font-size:12px;font-weight:700">🔄 진행중</div>
+            <div style="flex:1;background:var(--bg3);border-radius:4px;height:24px;position:relative;overflow:hidden">
+              <div style="background:#6366f1;height:100%;width:${(pending/total*100)}%;border-radius:4px"></div>
+              <div style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:700">${pending}건</div>
+            </div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--t3);text-align:right;margin-top:8px">총 ${total}건</div>
+      </div>
+    </div>
+  `;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 결재선 자동 매핑 (HR 모듈 연동)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+const HR_EMPLOYEE_PATH = "🧑‍💼 인사·급여/99.Dashboard(real-time)/employees.json";
+
+async function loadHRData() {
+  try {
+    const data = await fetchJson(HR_EMPLOYEE_PATH);
+    return data?.employees || data?.items || data || [];
+  } catch (e) {
+    console.warn("HR 데이터 로드 실패:", e);
+    return [];
+  }
+}
+
+// 결재선 자동 생성 (기안자 → 부서장 → 임원 → 대표)
+async function buildApprovalLine(drafterEmail) {
+  const employees = await loadHRData();
+  if (employees.length === 0) {
+    // HR 데이터 없으면 기본 결재선
+    return [
+      { email: drafterEmail, name: userName, role: "기안자", step: 0, action: "기안" },
+      { email: "purchase-mgr@enjet.co.kr", name: "구매팀장", role: "검토", step: 1 },
+      { email: "ceo@enjet.co.kr", name: "대표이사", role: "결재", step: 2 }
+    ];
+  }
+  
+  const drafter = employees.find(e => 
+    (e.email || "").toLowerCase() === drafterEmail.toLowerCase()
+  );
+  
+  if (!drafter) {
+    return [
+      { email: drafterEmail, name: userName, role: "기안자", step: 0, action: "기안" },
+      { email: "purchase-mgr@enjet.co.kr", name: "구매팀장", role: "검토", step: 1 },
+      { email: "ceo@enjet.co.kr", name: "대표이사", role: "결재", step: 2 }
+    ];
+  }
+  
+  const line = [
+    { email: drafter.email, name: drafter.name, dept: drafter.dept, rank: drafter.rank, role: "기안자", step: 0, action: "기안" }
+  ];
+  
+  // 부서장 찾기 (같은 부서에서 직급 최상위)
+  const sameDept = employees.filter(e => 
+    e.dept === drafter.dept && 
+    (e.email || "").toLowerCase() !== drafterEmail.toLowerCase()
+  );
+  
+  const RANK_ORDER = ["사원", "주임", "대리", "과장", "차장", "부장", "이사", "상무", "전무", "대표이사"];
+  sameDept.sort((a, b) => RANK_ORDER.indexOf(b.rank) - RANK_ORDER.indexOf(a.rank));
+  
+  if (sameDept[0] && sameDept[0].rank !== drafter.rank) {
+    line.push({
+      email: sameDept[0].email, name: sameDept[0].name, dept: sameDept[0].dept,
+      rank: sameDept[0].rank, role: "부서장", step: line.length
+    });
+  }
+  
+  // 구매팀장 (구매품의이므로)
+  const purchaseLead = employees.find(e => 
+    (e.dept || "").includes("구매") && RANK_ORDER.indexOf(e.rank) >= 4
+  );
+  if (purchaseLead && !line.find(l => l.email === purchaseLead.email)) {
+    line.push({
+      email: purchaseLead.email, name: purchaseLead.name, dept: purchaseLead.dept,
+      rank: purchaseLead.rank, role: "구매팀장", step: line.length
+    });
+  }
+  
+  // 임원 (상무 이상)
+  const executive = employees.find(e => 
+    RANK_ORDER.indexOf(e.rank) >= 7 && 
+    !line.find(l => l.email === e.email)
+  );
+  if (executive) {
+    line.push({
+      email: executive.email, name: executive.name, dept: executive.dept,
+      rank: executive.rank, role: "임원", step: line.length
+    });
+  }
+  
+  // 대표
+  const ceo = employees.find(e => 
+    e.rank === "대표이사" && !line.find(l => l.email === e.email)
+  );
+  if (ceo) {
+    line.push({
+      email: ceo.email, name: ceo.name, dept: ceo.dept,
+      rank: ceo.rank, role: "결재", step: line.length
+    });
+  }
+  
+  return line;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 통합 알림 센터 (메인 대시보드 + 우측 상단)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+let allNotifications = [];
+
+async function loadNotifications() {
+  allNotifications = [];
+  
+  // 1. 영업 견적 요청 (대기중)
+  try {
+    const quoteReqs = await fetchJson(`${ES_BASE}/es-quote-requests.json`);
+    const pending = (quoteReqs?.requests || []).filter(r => r.status === "pending");
+    pending.forEach(r => {
+      allNotifications.push({
+        id: r.id,
+        type: "quote_request",
+        title: `📋 ${r.company} 견적 요청`,
+        message: `프로젝트: ${r.projectCode}`,
+        timestamp: r.requestedAt,
+        urgency: "high",
+        from: r.salesperson
+      });
+    });
+  } catch (e) {}
+  
+  // 2. 영업 Todo (담당 ES)
+  const esTodos = salesTodos.filter(t => {
+    const dept = (t.assignedDept || t.dept || "").toString();
+    return dept.includes("ES") && t.status !== "완료" && t.status !== "completed";
+  });
+  esTodos.slice(0, 5).forEach(t => {
+    allNotifications.push({
+      id: t.id,
+      type: "todo",
+      title: `✅ ${t.title || t.subject || "Todo"}`,
+      message: `${t.company || ""} - ${t.assignee || "미지정"}`,
+      timestamp: t.createdAt || t.regDate,
+      urgency: "medium"
+    });
+  });
+  
+  // 3. 결재 진행중
+  const myApprovals = (approvalMaster?.approvals || []).filter(a => 
+    a.drafter?.email === userEmail && a.status === "진행중"
+  );
+  myApprovals.forEach(a => {
+    allNotifications.push({
+      id: a.id,
+      type: "approval",
+      title: `⚖️ ${a.title}`,
+      message: `현재 단계: ${a.approvalLine?.[a.currentStep || 0]?.name || "?"} 결재중`,
+      timestamp: a.createdAt,
+      urgency: "low"
+    });
+  });
+  
+  // 4. 채널 미생성 프로젝트
+  const channelMissing = countEligibleProjects() - Object.keys(channelMap).length;
+  if (channelMissing > 0) {
+    allNotifications.push({
+      id: "sys-channel",
+      type: "system",
+      title: `📺 ${channelMissing}개 프로젝트 채널 미생성`,
+      message: "다음 동기화 시 자동 생성됩니다",
+      timestamp: new Date().toISOString(),
+      urgency: "low"
+    });
+  }
+  
+  // 정렬: urgency > timestamp
+  const urgencyOrder = { high: 0, medium: 1, low: 2 };
+  allNotifications.sort((a, b) => {
+    const u = (urgencyOrder[a.urgency] || 3) - (urgencyOrder[b.urgency] || 3);
+    if (u !== 0) return u;
+    return (b.timestamp || "").localeCompare(a.timestamp || "");
+  });
+  
+  return allNotifications;
+}
+
+function showNotifications() {
+  loadNotifications().then(notifs => {
+    const html = notifs.length === 0 ?
+      `<div style="text-align:center;color:var(--t3);padding:30px">알림 없음</div>` :
+      notifs.map(n => {
+        const urgencyColor = n.urgency === "high" ? "#dc2626" : n.urgency === "medium" ? "#f59e0b" : "#6366f1";
+        return `
+          <div style="padding:12px;border-left:4px solid ${urgencyColor};background:#fff;border-radius:6px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
+            <div style="font-weight:700;font-size:13px;margin-bottom:3px">${n.title}</div>
+            <div style="font-size:11px;color:var(--t3)">${n.message}</div>
+            <div style="font-size:10px;color:var(--t3);margin-top:4px">${formatRelativeTime(n.timestamp)}</div>
+          </div>
+        `;
+      }).join("");
+    
+    const existing = document.getElementById("notifPanel");
+    if (existing) existing.remove();
+    
+    const panel = document.createElement("div");
+    panel.id = "notifPanel";
+    panel.style.cssText = "position:fixed;top:60px;right:20px;width:380px;max-height:70vh;background:var(--bg);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.2);z-index:9999;overflow:hidden;display:flex;flex-direction:column";
+    panel.innerHTML = `
+      <div style="padding:14px 18px;background:linear-gradient(135deg,var(--p),var(--p2));color:#fff;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:15px;font-weight:800">🔔 알림 (${notifs.length})</div>
+        <button onclick="document.getElementById('notifPanel').remove()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:16px">×</button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:12px">${html}</div>
+    `;
+    document.body.appendChild(panel);
+  });
 }
 
 // 시작
