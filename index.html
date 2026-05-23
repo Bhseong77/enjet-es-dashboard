@@ -246,6 +246,38 @@ tr.clickable:hover { background:var(--bg3); }
         <div class="kpi purple"><div class="kpi-label">팀 가동률</div><div class="kpi-val" id="kpiUtil">-</div><div class="kpi-sub">평균</div></div>
       </div>
 
+      <!-- Teams 채널 동기화 상태 -->
+      <div class="section" style="background:linear-gradient(135deg,#0f4c81,#1a6fd4);color:#fff">
+        <div class="section-head" style="border:none">
+          <div>
+            <div class="section-title" style="color:#fff"><span class="section-icon">📺</span>Teams 채널 동기화</div>
+            <div class="section-sub" id="syncInfo" style="color:rgba(255,255,255,0.85)">초기 로딩 중...</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn outline sm" style="background:rgba(255,255,255,0.15);color:#fff;border-color:rgba(255,255,255,0.4)" onclick="manualSync()">🔄 지금 동기화</button>
+            <button class="btn outline sm" style="background:rgba(255,255,255,0.15);color:#fff;border-color:rgba(255,255,255,0.4)" onclick="toggleAutoSync()" id="autoSyncBtn">⏸️ 자동 동기화 끄기</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:10px">
+          <div style="padding:10px;background:rgba(255,255,255,0.1);border-radius:8px">
+            <div style="font-size:11px;opacity:0.85">영업활동</div>
+            <div style="font-size:18px;font-weight:700" id="syncSales">-</div>
+          </div>
+          <div style="padding:10px;background:rgba(255,255,255,0.1);border-radius:8px">
+            <div style="font-size:11px;opacity:0.85">ES 프로젝트</div>
+            <div style="font-size:18px;font-weight:700" id="syncEsProj">-</div>
+          </div>
+          <div style="padding:10px;background:rgba(255,255,255,0.1);border-radius:8px">
+            <div style="font-size:11px;opacity:0.85">생성된 채널</div>
+            <div style="font-size:18px;font-weight:700" id="syncChannels">-</div>
+          </div>
+          <div style="padding:10px;background:rgba(255,255,255,0.1);border-radius:8px">
+            <div style="font-size:11px;opacity:0.85">최근 동기화</div>
+            <div style="font-size:13px;font-weight:700" id="syncLast">-</div>
+          </div>
+        </div>
+      </div>
+
       <!-- 영업 → ES 대기 작업 -->
       <div class="section">
         <div class="section-head">
@@ -320,42 +352,171 @@ tr.clickable:hover { background:var(--bg3); }
   <!-- TAB: 견적 -->
   <div id="tab-quotes" class="tab-panel hidden">
     <div class="main">
-      <div class="loading-card">💰 견적 작성 모듈은 Phase 2에서 구현됩니다</div>
+      <!-- KPI -->
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-label">진행 중인 견적</div><div class="kpi-val" id="qkpiActive">-</div><div class="kpi-sub">건</div></div>
+        <div class="kpi orange"><div class="kpi-label">단가 대기</div><div class="kpi-val" id="qkpiPending">-</div><div class="kpi-sub">구매팀 회신 대기</div></div>
+        <div class="kpi green"><div class="kpi-label">영업 송부 완료</div><div class="kpi-val" id="qkpiSent">-</div><div class="kpi-sub">이번달</div></div>
+        <div class="kpi purple"><div class="kpi-label">평균 작성 시간</div><div class="kpi-val" id="qkpiAvgTime">-</div><div class="kpi-sub">일</div></div>
+      </div>
+
+      <!-- 견적 목록 -->
+      <div class="section">
+        <div class="section-head">
+          <div><div class="section-title"><span class="section-icon">💰</span>견적서 목록</div><div class="section-sub">SE팀이 작성하는 견적서 (BOM + 인건비)</div></div>
+          <div style="display:flex;gap:6px">
+            <button class="btn outline sm" onclick="loadAllData().then(renderQuotes)">🔄 새로고침</button>
+            <button class="btn" onclick="openQuoteNew()">+ 새 견적 작성</button>
+          </div>
+        </div>
+        
+        <!-- 필터 -->
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <input type="text" id="quoteSearch" placeholder="🔍 고객사·프로젝트 검색..." oninput="renderQuotes()"
+            style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;flex:1;min-width:200px">
+          <select id="quoteStatusFilter" onchange="renderQuotes()" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            <option value="">전체 상태</option>
+            <option value="draft">📝 작성중</option>
+            <option value="bom_request">📤 단가 요청</option>
+            <option value="bom_received">📥 단가 수령</option>
+            <option value="labor_added">💼 인건비 추가</option>
+            <option value="sent_to_sales">✅ 영업 송부</option>
+            <option value="cancelled">❌ 취소</option>
+          </select>
+        </div>
+        
+        <div id="quotesList">
+          <div class="loading-card"><span class="loader"></span>견적 데이터 로딩 중...</div>
+        </div>
+      </div>
     </div>
   </div>
 
   <!-- TAB: SE팀 -->
   <div id="tab-se" class="tab-panel hidden">
     <div class="main">
-      <div class="loading-card">🔧 SE팀 모듈은 Phase 3에서 구현됩니다</div>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-label">담당 프로젝트</div><div class="kpi-val" id="seKpiProj">-</div><div class="kpi-sub">진행중</div></div>
+        <div class="kpi orange"><div class="kpi-label">영업 Todo (담당:ES)</div><div class="kpi-val" id="seKpiTodo">-</div><div class="kpi-sub">대기/진행</div></div>
+        <div class="kpi green"><div class="kpi-label">견적 작성중</div><div class="kpi-val" id="seKpiQuote">-</div><div class="kpi-sub">건</div></div>
+        <div class="kpi purple"><div class="kpi-label">도면 (Cloudium)</div><div class="kpi-val" id="seKpiDraw">-</div><div class="kpi-sub">건</div></div>
+      </div>
+
+      <!-- 영업 Todo (담당 ES) -->
+      <div class="section">
+        <div class="section-head">
+          <div><div class="section-title"><span class="section-icon">📥</span>영업 → ES Todo</div><div class="section-sub">영업에서 ES 담당으로 넘긴 작업 · 완료 처리 시 영업도 동기화</div></div>
+          <button class="btn outline sm" onclick="loadAllData().then(renderSETab)">🔄 새로고침</button>
+        </div>
+        <div id="seTodoList"><div class="loading-card"><span class="loader"></span>로딩 중...</div></div>
+      </div>
+
+      <!-- 도면 관리 (Cloudium URL + 캡처) -->
+      <div class="section">
+        <div class="section-head">
+          <div><div class="section-title"><span class="section-icon">📐</span>도면 관리 (Cloudium 연동)</div><div class="section-sub">Cloudium에서 도면 관리 · 여기에는 URL과 대표 캡처만</div></div>
+          <button class="btn" onclick="openDrawingModal()">+ 도면 등록</button>
+        </div>
+        <div id="seDrawingList"><div class="loading-card">도면 데이터 로딩 중...</div></div>
+      </div>
     </div>
   </div>
 
   <!-- TAB: PE팀 -->
   <div id="tab-pe" class="tab-panel hidden">
     <div class="main">
-      <div class="loading-card">🧪 PE팀 모듈은 Phase 3에서 구현됩니다</div>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-label">담당 프로젝트</div><div class="kpi-val" id="peKpiProj">-</div><div class="kpi-sub">활성</div></div>
+        <div class="kpi orange"><div class="kpi-label">테스트 진행</div><div class="kpi-val" id="peKpiTest">-</div><div class="kpi-sub">건</div></div>
+        <div class="kpi green"><div class="kpi-label">완료 보고서</div><div class="kpi-val" id="peKpiReport">-</div><div class="kpi-sub">이번달</div></div>
+        <div class="kpi purple"><div class="kpi-label">내부 R&D</div><div class="kpi-val" id="peKpiRD">-</div><div class="kpi-sub">건</div></div>
+      </div>
+
+      <div class="section">
+        <div class="section-head">
+          <div><div class="section-title"><span class="section-icon">🧪</span>테스트 의뢰 / 보고서</div><div class="section-sub">고객 샘플 테스트 + 내부 개발 테스트</div></div>
+          <button class="btn" onclick="openTestModal()">+ 테스트 등록</button>
+        </div>
+        <div id="peTestList"><div class="loading-card">테스트 데이터 로딩 중...</div></div>
+      </div>
     </div>
   </div>
 
   <!-- TAB: AE팀 -->
   <div id="tab-ae" class="tab-panel hidden">
     <div class="main">
-      <div class="loading-card">🛠️ AE팀 모듈은 Phase 3에서 구현됩니다</div>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-label">CS 처리중</div><div class="kpi-val" id="aeKpiCs">-</div><div class="kpi-sub">건</div></div>
+        <div class="kpi orange"><div class="kpi-label">현장 출장</div><div class="kpi-val" id="aeKpiTrip">-</div><div class="kpi-sub">이번주</div></div>
+        <div class="kpi green"><div class="kpi-label">AS 견적 송부</div><div class="kpi-val" id="aeKpiQuote">-</div><div class="kpi-sub">대기</div></div>
+        <div class="kpi purple"><div class="kpi-label">완료</div><div class="kpi-val" id="aeKpiDone">-</div><div class="kpi-sub">이번달</div></div>
+      </div>
+
+      <div class="section">
+        <div class="section-head">
+          <div><div class="section-title"><span class="section-icon">🛠️</span>영업 → AE CS Todo</div><div class="section-sub">영업에서 받은 CS/AS 요청 · 현장 대응 + 원가 산출</div></div>
+        </div>
+        <div id="aeCsList"><div class="loading-card">CS 데이터 로딩 중...</div></div>
+      </div>
     </div>
   </div>
 
   <!-- TAB: BOM -->
   <div id="tab-bom" class="tab-panel hidden">
     <div class="main">
-      <div class="loading-card">📋 BOM 모듈은 Phase 2에서 구현됩니다</div>
+      <div class="section">
+        <div class="section-head">
+          <div><div class="section-title"><span class="section-icon">📋</span>BOM 마스터 (구매 모듈 연동)</div><div class="section-sub">구매 모듈에서 자동 동기화 · 견적 작성 시 검색 가능</div></div>
+          <button class="btn outline sm" onclick="loadAllData().then(renderBomMaster)">🔄 새로고침</button>
+        </div>
+        
+        <div class="kpi-grid">
+          <div class="kpi"><div class="kpi-label">전체 품목</div><div class="kpi-val" id="bomTotal">-</div><div class="kpi-sub">건</div></div>
+          <div class="kpi green"><div class="kpi-label">단가 등록됨</div><div class="kpi-val" id="bomPriced">-</div><div class="kpi-sub">건</div></div>
+          <div class="kpi orange"><div class="kpi-label">단가 미등록</div><div class="kpi-val" id="bomNoPrice">-</div><div class="kpi-sub">건</div></div>
+        </div>
+        
+        <input type="text" id="bomSearch" placeholder="🔍 품목명·코드·규격 검색..." oninput="renderBomMaster()"
+          style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:100%;margin-bottom:12px">
+        
+        <div id="bomList">
+          <div class="loading-card"><span class="loader"></span>BOM 데이터 로딩 중...</div>
+        </div>
+      </div>
     </div>
   </div>
 
   <!-- TAB: 문서 -->
   <div id="tab-docs" class="tab-panel hidden">
     <div class="main">
-      <div class="loading-card">📚 문서 모듈은 Phase 3에서 구현됩니다</div>
+      <!-- 회의록 섹션 -->
+      <div class="section">
+        <div class="section-head">
+          <div><div class="section-title"><span class="section-icon">📝</span>회의록 (영업 + ES 내부)</div><div class="section-sub">영업 회의록 자동 동기화 + ES 내부 회의 별도 작성</div></div>
+          <button class="btn" onclick="openMeetingModal()">+ ES 내부 회의록</button>
+        </div>
+        
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <input type="text" id="meetingSearch" placeholder="🔍 회의 검색..." oninput="renderMeetings()"
+            style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;flex:1;min-width:200px">
+          <select id="meetingTypeFilter" onchange="renderMeetings()" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            <option value="">전체 회의록</option>
+            <option value="sales">📊 영업 회의록</option>
+            <option value="es">🔧 ES 내부 회의록</option>
+          </select>
+        </div>
+        
+        <div id="meetingList"><div class="loading-card">회의록 로딩 중...</div></div>
+      </div>
+
+      <!-- 자료 섹션 -->
+      <div class="section">
+        <div class="section-head">
+          <div><div class="section-title"><span class="section-icon">📁</span>프로젝트 자료</div><div class="section-sub">기술자료 · 샘플테스트보고서 · 영업 자료 양방향 동기화</div></div>
+          <button class="btn" onclick="openDocUploadModal()">📤 자료 업로드</button>
+        </div>
+        <div id="docList"><div class="loading-card">자료 로딩 중...</div></div>
+      </div>
     </div>
   </div>
 
@@ -367,7 +528,318 @@ tr.clickable:hover { background:var(--bg3); }
   </div>
 </div>
 
+<!-- ━━ ES 내부 회의록 모달 ━━ -->
+<div id="modalMeeting" class="modal-backdrop">
+  <div class="modal lg">
+    <div class="modal-head" style="background:linear-gradient(135deg,#7c3aed,#5b21b6)">
+      <h2 id="meetingModalTitle">📝 ES 내부 회의록</h2>
+      <button class="modal-close" onclick="closeModal('modalMeeting')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:14px">
+        <div><label class="qf-label">프로젝트 코드</label>
+          <select id="mF_projectCode" class="qf-input">
+            <option value="">선택...</option>
+          </select>
+        </div>
+        <div><label class="qf-label">회의 일자</label><input type="date" id="mF_date" class="qf-input"></div>
+        <div><label class="qf-label">회의 시간</label><input type="time" id="mF_time" class="qf-input"></div>
+        <div><label class="qf-label">장소</label><input type="text" id="mF_place" class="qf-input" placeholder="회의실 / 온라인"></div>
+      </div>
+      <div style="margin-bottom:10px"><label class="qf-label">회의 제목</label><input type="text" id="mF_title" class="qf-input" placeholder="예: ABC社 자동화라인 내부 검토"></div>
+      <div style="margin-bottom:10px"><label class="qf-label">참석자 (쉼표 구분)</label><input type="text" id="mF_attendees" class="qf-input" placeholder="홍길동 차장, 김철수 과장"></div>
+      <div style="margin-bottom:10px"><label class="qf-label">회의 내용</label><textarea id="mF_content" class="qf-input" rows="8" placeholder="협의 내용을 작성하세요..."></textarea></div>
+      <div style="margin-bottom:10px"><label class="qf-label">결정 사항 / Action Items</label><textarea id="mF_actions" class="qf-input" rows="4" placeholder="- 누가 무엇을 언제까지"></textarea></div>
+      
+      <div style="background:var(--bg3);padding:10px;border-radius:8px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+          <input type="checkbox" id="mF_postChannel" checked>
+          📺 Teams 채널에 자동 게시
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin-top:4px">
+          <input type="checkbox" id="mF_shareSales" checked>
+          🔄 영업에도 공유 (회의록 DB)
+        </label>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn danger" id="mDeleteBtn" onclick="deleteMeeting()" style="margin-right:auto;display:none">🗑️ 삭제</button>
+      <button class="btn outline" onclick="closeModal('modalMeeting')">취소</button>
+      <button class="btn" onclick="saveMeeting()">💾 저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ━━ 도면 등록 모달 (Cloudium 링크) ━━ -->
+<div id="modalDrawing" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-head" style="background:linear-gradient(135deg,#1a6fd4,#0f4c81)">
+      <h2>📐 도면 등록 (Cloudium 연동)</h2>
+      <button class="modal-close" onclick="closeModal('modalDrawing')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:10px"><label class="qf-label">프로젝트 코드</label>
+        <select id="dF_projectCode" class="qf-input"><option value="">선택...</option></select>
+      </div>
+      <div style="margin-bottom:10px"><label class="qf-label">도면 종류</label>
+        <select id="dF_type" class="qf-input">
+          <option value="기구">🔧 기구 도면</option>
+          <option value="전장">⚡ 전장 도면</option>
+          <option value="조립">🔨 조립도</option>
+          <option value="배치">📐 배치도</option>
+          <option value="기타">📄 기타</option>
+        </select>
+      </div>
+      <div style="margin-bottom:10px"><label class="qf-label">도면명</label><input type="text" id="dF_name" class="qf-input" placeholder="예: ABC社_자동화라인_조립도_v1.2"></div>
+      <div style="margin-bottom:10px"><label class="qf-label">버전</label><input type="text" id="dF_version" class="qf-input" placeholder="v1.0"></div>
+      <div style="margin-bottom:10px"><label class="qf-label">Cloudium URL</label><input type="url" id="dF_url" class="qf-input" placeholder="https://cloudium.../..."></div>
+      <div style="margin-bottom:10px"><label class="qf-label">대표 이미지 URL (선택)</label><input type="url" id="dF_imageUrl" class="qf-input" placeholder="https://..."></div>
+      <div style="margin-bottom:10px"><label class="qf-label">설명</label><textarea id="dF_note" class="qf-input" rows="3"></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn outline" onclick="closeModal('modalDrawing')">취소</button>
+      <button class="btn" onclick="saveDrawing()">💾 저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ━━ 테스트 등록 모달 (PE팀) ━━ -->
+<div id="modalTest" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-head" style="background:linear-gradient(135deg,#10b981,#047857)">
+      <h2>🧪 테스트 등록</h2>
+      <button class="modal-close" onclick="closeModal('modalTest')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:10px"><label class="qf-label">프로젝트 코드</label>
+        <select id="tF_projectCode" class="qf-input"><option value="">선택...</option></select>
+      </div>
+      <div style="margin-bottom:10px"><label class="qf-label">테스트 종류</label>
+        <select id="tF_type" class="qf-input">
+          <option value="sample">🧪 고객 샘플 테스트</option>
+          <option value="internal">🔬 내부 개발 테스트</option>
+          <option value="qualification">✅ 공정 검증</option>
+        </select>
+      </div>
+      <div style="margin-bottom:10px"><label class="qf-label">제목</label><input type="text" id="tF_title" class="qf-input"></div>
+      <div style="margin-bottom:10px"><label class="qf-label">담당자</label><input type="text" id="tF_owner" class="qf-input"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div><label class="qf-label">시작일</label><input type="date" id="tF_startDate" class="qf-input"></div>
+        <div><label class="qf-label">완료 예정</label><input type="date" id="tF_endDate" class="qf-input"></div>
+      </div>
+      <div style="margin-bottom:10px"><label class="qf-label">상태</label>
+        <select id="tF_status" class="qf-input">
+          <option value="대기">대기</option>
+          <option value="진행중">진행중</option>
+          <option value="완료">완료</option>
+          <option value="중단">중단</option>
+        </select>
+      </div>
+      <div style="margin-bottom:10px"><label class="qf-label">결과/보고</label><textarea id="tF_result" class="qf-input" rows="4"></textarea></div>
+      <div style="margin-bottom:10px"><label class="qf-label">보고서 URL (SharePoint/Cloudium)</label><input type="url" id="tF_reportUrl" class="qf-input"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn outline" onclick="closeModal('modalTest')">취소</button>
+      <button class="btn" onclick="saveTest()">💾 저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ━━ 자료 업로드 모달 ━━ -->
+<div id="modalDocUpload" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-head" style="background:linear-gradient(135deg,#f59e0b,#d97706)">
+      <h2>📁 ES 자료 업로드</h2>
+      <button class="modal-close" onclick="closeModal('modalDocUpload')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:10px"><label class="qf-label">프로젝트 코드</label>
+        <select id="docF_projectCode" class="qf-input"><option value="">선택...</option></select>
+      </div>
+      <div style="margin-bottom:10px"><label class="qf-label">자료 종류</label>
+        <select id="docF_category" class="qf-input">
+          <option value="기술자료">📐 기술자료</option>
+          <option value="샘플테스트보고서">🧪 샘플테스트보고서</option>
+          <option value="제안서">📝 제안서</option>
+          <option value="매뉴얼">📚 매뉴얼</option>
+          <option value="기타">📄 기타</option>
+        </select>
+      </div>
+      <div style="margin-bottom:10px"><label class="qf-label">파일명</label><input type="text" id="docF_name" class="qf-input"></div>
+      <div style="margin-bottom:10px"><label class="qf-label">파일 첨부</label><input type="file" id="docF_file" class="qf-input"></div>
+      <div style="margin-bottom:10px"><label class="qf-label">설명</label><textarea id="docF_note" class="qf-input" rows="3"></textarea></div>
+      
+      <div style="background:var(--bg3);padding:10px;border-radius:8px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+          <input type="checkbox" id="docF_shareSales" checked>
+          🔄 영업 모듈에도 공유 (customerFiles에 자동 추가)
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin-top:4px">
+          <input type="checkbox" id="docF_postChannel" checked>
+          📺 Teams 채널에 자동 게시
+        </label>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn outline" onclick="closeModal('modalDocUpload')">취소</button>
+      <button class="btn" onclick="uploadDoc()">📤 업로드</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
+
+<!-- ━━ 견적 작성 모달 ━━ -->
+<div id="modalQuote" class="modal-backdrop">
+  <div class="modal lg">
+    <div class="modal-head" style="background:linear-gradient(135deg,#1a6fd4,#0f4c81)">
+      <h2 id="quoteModalTitle">💰 견적서 작성</h2>
+      <button class="modal-close" onclick="closeModal('modalQuote')">×</button>
+    </div>
+    <div class="modal-body">
+      <!-- 견적 기본 정보 -->
+      <div style="background:var(--bg3);padding:14px;border-radius:10px;margin-bottom:14px">
+        <strong style="font-size:13px;color:var(--p)">📋 견적 기본 정보</strong>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:10px">
+          <div><label class="qf-label">견적 번호</label><input type="text" id="qF_id" readonly class="qf-input" style="background:var(--bg)"></div>
+          <div><label class="qf-label">프로젝트 코드*</label>
+            <select id="qF_projectCode" class="qf-input" onchange="onProjectChange()">
+              <option value="">선택...</option>
+            </select>
+          </div>
+          <div><label class="qf-label">고객사</label><input type="text" id="qF_customer" class="qf-input"></div>
+          <div><label class="qf-label">영업 담당</label><input type="text" id="qF_salesperson" class="qf-input"></div>
+          <div><label class="qf-label">PM (SE팀)</label><input type="text" id="qF_pm" class="qf-input" value=""></div>
+          <div><label class="qf-label">마감일</label><input type="date" id="qF_dueDate" class="qf-input"></div>
+        </div>
+        <div style="margin-top:8px"><label class="qf-label">프로젝트명</label><input type="text" id="qF_title" class="qf-input"></div>
+      </div>
+
+      <!-- BOM 작성 -->
+      <div style="background:#fff;border:2px solid var(--p);border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <strong style="font-size:13px;color:var(--p)">📦 BOM 작성 (SE팀)</strong>
+          <div style="display:flex;gap:6px">
+            <button class="btn outline sm" onclick="openBomPicker()">🔍 구매 BOM에서 가져오기</button>
+            <button class="btn sm" onclick="addBomRow()">+ 부품 추가</button>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table id="bomTable" style="font-size:12px">
+            <thead>
+              <tr>
+                <th>#</th><th>품목코드</th><th>품목명</th><th>규격</th>
+                <th class="right">수량</th><th>단위</th>
+                <th class="right">단가</th><th class="right">금액</th>
+                <th class="center">상태</th><th class="center"></th>
+              </tr>
+            </thead>
+            <tbody id="bomRows"></tbody>
+            <tfoot>
+              <tr style="font-weight:700;background:var(--bg3)">
+                <td colspan="7" class="right">BOM 합계</td>
+                <td class="right" id="bomSubtotal">0</td>
+                <td colspan="2"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div id="bomRequestStatus" style="margin-top:8px;padding:8px 10px;background:var(--bg3);border-radius:6px;font-size:11px;color:var(--t3);display:none"></div>
+      </div>
+
+      <!-- 인건비 -->
+      <div style="background:#fff;border:2px solid var(--g);border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <strong style="font-size:13px;color:var(--g)">💼 예상 인건비 (SE/PE/AE)</strong>
+          <button class="btn outline sm" style="border-color:var(--g);color:var(--g)" onclick="addLaborRow()">+ 인력 추가</button>
+        </div>
+        <div class="tbl-wrap">
+          <table id="laborTable" style="font-size:12px">
+            <thead>
+              <tr>
+                <th>팀</th><th>역할</th><th class="right">시간</th>
+                <th class="right">시급 (원)</th><th class="right">금액</th><th class="center"></th>
+              </tr>
+            </thead>
+            <tbody id="laborRows"></tbody>
+            <tfoot>
+              <tr style="font-weight:700;background:var(--bg3)">
+                <td colspan="4" class="right">인건비 합계</td>
+                <td class="right" id="laborSubtotal">0</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- 부대비용 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div><label class="qf-label">기타 부대비용 (출장/배송/설치 등)</label><input type="number" id="qF_misc" value="0" class="qf-input" oninput="recalcQuote()"></div>
+        <div><label class="qf-label">예비비 (Contingency, %)</label><input type="number" id="qF_contingency" value="0" class="qf-input" oninput="recalcQuote()"></div>
+      </div>
+
+      <!-- 합계 -->
+      <div style="background:linear-gradient(135deg,#1a6fd4,#0f4c81);color:#fff;padding:16px 20px;border-radius:12px;margin-bottom:14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;font-size:13px;opacity:0.9">
+          <div>BOM 합계: <strong id="sumBom" style="font-size:15px;float:right">0원</strong></div>
+          <div>인건비: <strong id="sumLabor" style="font-size:15px;float:right">0원</strong></div>
+          <div>부대비용: <strong id="sumMisc" style="font-size:15px;float:right">0원</strong></div>
+          <div>예비비: <strong id="sumContingency" style="font-size:15px;float:right">0원</strong></div>
+        </div>
+        <div style="border-top:1px solid rgba(255,255,255,0.3);padding-top:10px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:14px;font-weight:600">💰 ES 산출 원가 (영업에 송부)</span>
+          <span id="sumTotal" style="font-size:24px;font-weight:800;font-variant-numeric:tabular-nums">0원</span>
+        </div>
+      </div>
+
+      <!-- 비고 -->
+      <div><label class="qf-label">비고 / 메모</label><textarea id="qF_note" class="qf-input" rows="2"></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn danger" id="qDeleteBtn" onclick="deleteQuote()" style="margin-right:auto;display:none">🗑️ 삭제</button>
+      <button class="btn outline" onclick="closeModal('modalQuote')">취소</button>
+      <button class="btn warn" onclick="saveQuote('draft')">💾 임시 저장</button>
+      <button class="btn" id="qBomReqBtn" onclick="requestBomPricing()">📤 구매팀 단가 요청</button>
+      <button class="btn purple" id="qApprovalBtn" onclick="submitApproval()" style="display:none">⚖️ 전자결재 상신</button>
+      <button class="btn success" id="qSendBtn" onclick="sendToSales()" style="display:none">✅ 영업 송부</button>
+    </div>
+  </div>
+</div>
+
+<!-- BOM 마스터 검색 모달 -->
+<div id="modalBomPicker" class="modal-backdrop">
+  <div class="modal lg">
+    <div class="modal-head" style="background:linear-gradient(135deg,#0f4c81,#0a3a64)">
+      <h2>🔍 구매 BOM 마스터에서 부품 선택</h2>
+      <button class="modal-close" onclick="closeModal('modalBomPicker')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="text" id="bomPickerSearch" placeholder="🔍 품목명·코드·규격 검색..." oninput="renderBomPickerList()"
+        style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:100%;margin-bottom:12px">
+      <div style="font-size:11px;color:var(--t3);margin-bottom:6px">선택한 부품이 BOM에 자동 추가됩니다 (단가도 자동)</div>
+      <div id="bomPickerList" style="max-height:400px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
+<style>
+.qf-label { font-size:11px; color:var(--t3); font-weight:600; display:block; margin-bottom:3px; }
+.qf-input { width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit; box-sizing:border-box; }
+.qf-input:focus { outline:none; border-color:var(--p); }
+.qf-input.error { border-color:var(--r); background:var(--rd); }
+#bomRows td, #laborRows td { padding:6px 8px; }
+#bomRows input, #laborRows input, #bomRows select, #laborRows select { 
+  width:100%; padding:4px 6px; border:1px solid var(--border); border-radius:4px; 
+  font-size:12px; font-family:inherit; box-sizing:border-box;
+}
+#bomRows .price-cell, #bomRows .total-cell { text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+#bomRows .pending { color:var(--y); }
+#bomRows .priced { color:var(--g); }
+.bom-pick-item { padding:10px 12px; border-bottom:1px solid var(--border); cursor:pointer; }
+.bom-pick-item:hover { background:var(--bg3); }
+.bom-pick-item.selected { background:var(--pd); }
+</style>
 
 <script>
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -376,7 +848,19 @@ tr.clickable:hover { background:var(--bg3); }
 
 const CLIENT_ID = "76793776-3330-496f-97f1-9f0c034f3f07";
 const TENANT_ID = "58b310e1-9278-47ab-8e49-792728818c9e";
-const SCOPES = ["User.Read","Files.ReadWrite.All","Sites.ReadWrite.All"];
+const SCOPES = [
+  "User.Read","Files.ReadWrite.All","Sites.ReadWrite.All",
+  // Teams 채널 관리 권한
+  "Group.ReadWrite.All",
+  "Channel.ReadWrite.All",
+  "ChannelMessage.Send",
+  "ChannelMessage.ReadWrite",
+  "TeamsTab.ReadWrite.All"
+];
+
+// Teams 팀 ID
+const TEAMS_PROJECT_ACTIVE = "83191297-dd41-43e2-8adc-56f89bb455e5";  // 02. 프로젝트 (진행중)
+const TEAMS_PROJECT_ARCHIVE = "8ca99fa2-937a-4a76-b889-0b7564cff837"; // 03. 프로젝트 Archive
 
 const SP_SITE = "enjetco.sharepoint.com:/sites/06.BackOffice";
 const ACCESS_CONTROL_PATH = "📋 전자결재/99.Dashboard(real-time)/access-control.json";
@@ -412,6 +896,14 @@ const ES_TESTS_PATH = `${ES_BASE}/es-tests.json`;              // PE 테스트
 const ES_CS_PATH = `${ES_BASE}/es-cs-tickets.json`;            // AE CS
 const ES_DOCS_PATH = `${ES_BASE}/es-documents.json`;            // 문서
 const ES_TEAM_MEMBERS_PATH = `${ES_BASE}/es-team-members.json`; // 팀원 배정
+const ES_CHANNEL_MAP_PATH = `${ES_BASE}/es-channel-map.json`;  // ⭐ Teams 채널 매핑
+const ES_SYNC_LOG_PATH = `${ES_BASE}/es-sync-log.json`;        // 동기화 로그
+
+// ━━ Phase 4: 양방향 동기화 ━━
+const SALES_TODOS_PATH = `${SALES_FOLDER}/sales-todos.json`;       // 영업 Todo
+const ES_MEETINGS_PATH = `${ES_BASE}/es-meetings.json`;            // ES 내부 회의록
+const ES_DOCS_SYNC_PATH = `${ES_BASE}/es-docs-sync.json`;          // 자료 동기화 로그
+const APPROVAL_MASTER_PATH = "📋 전자결재/99.Dashboard(real-time)/approval-master.json";
 
 // 부서/팀 표준
 const ES_TEAMS = {
@@ -445,6 +937,14 @@ let esProjects = [];            // ES 프로젝트
 let esQuotes = [];              // ES 견적서
 let esBomRequests = [];         // SE → 구매 단가 요청
 let esTeamMembers = [];         // 팀원 배정
+let channelMap = {};            // Teams 채널 매핑 { projectCode: {channelId, teamId, channelName, createdAt} }
+let syncInProgress = false;
+let lastSyncAt = null;
+
+// Phase 4 추가 데이터
+let salesTodos = [];            // 영업 Todo (담당:ES인 것 표시)
+let esMeetings = [];            // ES 내부 회의록
+let approvalMaster = { approvals: [] };  // 전자결재 마스터
 
 let msalInstance = null;
 const $ = id => document.getElementById(id);
@@ -532,6 +1032,9 @@ async function afterLogin() {
   if (canAccess) {
     await loadAllData();
     renderDashboard();
+    
+    // ⭐ Teams 채널 자동 동기화 시작
+    startAutoSync();
   }
 }
 
@@ -667,13 +1170,28 @@ async function loadAllData() {
   const etm = await fetchJson(ES_TEAM_MEMBERS_PATH);
   esTeamMembers = Array.isArray(etm) ? etm : (etm?.members || etm?.items || []);
   
+  // ━━ Teams 채널 매핑 ━━
+  const cm = await fetchJson(ES_CHANNEL_MAP_PATH);
+  channelMap = cm?.map || cm?.mappings || {};
+  
+  // ━━ Phase 4 데이터 ━━
+  const stodos = await fetchJson(SALES_TODOS_PATH);
+  salesTodos = Array.isArray(stodos) ? stodos : (stodos?.todos || stodos?.items || []);
+  
+  const em = await fetchJson(ES_MEETINGS_PATH);
+  esMeetings = Array.isArray(em) ? em : (em?.meetings || em?.items || []);
+  
+  const am = await fetchJson(APPROVAL_MASTER_PATH);
+  approvalMaster = am || { approvals: [] };
+  
   console.log("[ES] 데이터 로드 완료:", {
     salesActivities: salesActivities.length,
     salesProjects: salesProjects.length,
     salesMeetingLogs: salesMeetingLogs.length,
     purchaseRequests: purchaseRequests.length,
     bomMaster: bomMaster.length,
-    esProjects: esProjects.length
+    esProjects: esProjects.length,
+    channelMap: Object.keys(channelMap).length
   });
 }
 
@@ -687,6 +1205,12 @@ function go(tab) {
   document.querySelectorAll(".tab-panel").forEach(p => p.classList.toggle("hidden", p.id !== `tab-${tab}`));
   if (tab === "dashboard") renderDashboard();
   if (tab === "projects") renderProjects();
+  if (tab === "quotes") renderQuotes();
+  if (tab === "bom") renderBomMaster();
+  if (tab === "se") renderSETab();
+  if (tab === "pe") renderPETab();
+  if (tab === "ae") renderAETab();
+  if (tab === "docs") renderDocsTab();
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -699,10 +1223,47 @@ function renderDashboard() {
   if (syncEl) {
     syncEl.innerHTML = `영업활동 ${salesActivities.length}건 · 영업 프로젝트 ${salesProjects.length}건 · 구매 BOM ${bomMaster.length}건 · ES 프로젝트 ${esProjects.length}건`;
   }
+  
+  // Teams 채널 동기화 상태
+  if ($("syncSales")) {
+    $("syncSales").textContent = `${salesActivities.length}건`;
+    $("syncEsProj").textContent = `${esProjects.length}건`;
+    $("syncChannels").textContent = `${Object.keys(channelMap).length}개`;
+    $("syncLast").textContent = lastSyncAt ? formatRelativeTime(lastSyncAt) : "아직 없음";
+    
+    // 동기화 안내 메시지
+    const eligible = countEligibleProjects();
+    const missing = eligible - Object.keys(channelMap).length;
+    if (missing > 0) {
+      $("syncInfo").innerHTML = `💡 채널 미생성 프로젝트 <strong>${missing}건</strong> · 곧 자동 생성됩니다`;
+    } else {
+      $("syncInfo").innerHTML = `✅ 모든 프로젝트 채널 동기화됨`;
+    }
+  }
+  
   renderKpi();
   renderPendingTodos();
   renderProjectProgress();
   renderTeamUtilization();
+}
+
+function formatRelativeTime(iso) {
+  if (!iso) return "-";
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 60000) return "방금 전";
+  if (diff < 3600000) return `${Math.floor(diff/60000)}분 전`;
+  if (diff < 86400000) return `${Math.floor(diff/3600000)}시간 전`;
+  return new Date(iso).toLocaleString("ko-KR");
+}
+
+function countEligibleProjects() {
+  // 채널 생성 대상: projectCode가 있고, 중단/취소가 아닌 영업활동
+  return salesActivities.filter(a => {
+    const code = a.projectCode || a.pjcode || a.code;
+    if (!code) return false;
+    if (a.status === "중단" || a.status === "취소" || a.status === "실패") return false;
+    return true;
+  }).length;
 }
 
 function renderKpi() {
@@ -915,6 +1476,7 @@ function renderProjects() {
   $("projectsList").innerHTML = `
     <div style="margin-bottom:10px;font-size:12px;color:var(--t3)">
       전체 ${esProjects.length}건 · 진행중 ${esProjects.filter(p=>p.status==="진행중").length} · 신규 ${esProjects.filter(p=>p.status==="신규").length} · 완료 ${esProjects.filter(p=>p.status==="완료"||p.status==="납품완료").length}
+      · Teams 채널 ${Object.keys(channelMap).filter(k=>channelMap[k].status==="active").length}개 연결됨
     </div>
     <div class="tbl-wrap">
       <table>
@@ -922,13 +1484,21 @@ function renderProjects() {
           <tr>
             <th>프로젝트 코드</th><th>제목</th><th>고객사</th><th>영업담당</th><th>PM(SE)</th>
             <th class="center">상태</th><th class="right">진행률</th>
-            <th>시작일</th>
+            <th>시작일</th><th class="center">📺 채널</th>
           </tr>
         </thead>
         <tbody>
-          ${sorted.map(p => `
+          ${sorted.map(p => {
+            const code = p.salesCode || p.id;
+            const channel = channelMap[code];
+            const channelBtn = channel && channel.status === "active" ?
+              `<a href="${getChannelUrl(code)}" target="_blank" onclick="event.stopPropagation()" style="text-decoration:none">
+                <span class="badge badge-blue" style="cursor:pointer">📺 열기</span>
+              </a>` :
+              '<span class="badge badge-gray">미연결</span>';
+            return `
             <tr class="clickable" onclick="viewProject('${p.id}')">
-              <td style="font-family:monospace;font-size:11px"><strong>${p.salesCode || p.id || "-"}</strong></td>
+              <td style="font-family:monospace;font-size:11px"><strong>${code || "-"}</strong></td>
               <td class="cell-strong">${p.title || "-"}</td>
               <td>${p.customer || "-"}</td>
               <td>${p.salesperson || "-"}</td>
@@ -936,8 +1506,9 @@ function renderProjects() {
               <td class="center">${getStatusBadge(p.status)}</td>
               <td class="right">${p.progress || 0}%</td>
               <td>${formatDate(p.startDate)}</td>
+              <td class="center">${channelBtn}</td>
             </tr>
-          `).join("")}
+          `;}).join("")}
         </tbody>
       </table>
     </div>
@@ -1059,6 +1630,1901 @@ function toast(msg, type = "") {
   t.textContent = msg;
   t.className = "toast on " + type;
   setTimeout(() => t.classList.remove("on"), 2500);
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 견적 작성 (Phase 2)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+let editingQuoteId = null;
+let currentBomItems = [];
+let currentLaborItems = [];
+
+// 기본 인건비 단가 (회사 표준)
+const LABOR_RATES = {
+  "SE-설계": 50000,
+  "SE-PM": 60000,
+  "PE-테스트": 45000,
+  "PE-개발": 50000,
+  "AE-설치": 40000,
+  "AE-CS": 40000,
+  "AE-출장": 45000
+};
+
+function renderQuotes() {
+  // KPI
+  const active = esQuotes.filter(q => !["sent_to_sales","cancelled"].includes(q.status));
+  const pending = esQuotes.filter(q => q.status === "bom_request");
+  const thisMonth = new Date().toISOString().substring(0,7);
+  const sent = esQuotes.filter(q => q.status === "sent_to_sales" && (q.sentAt || "").startsWith(thisMonth));
+  
+  $("qkpiActive").innerHTML = `${active.length}<span class="kpi-unit">건</span>`;
+  $("qkpiPending").innerHTML = `${pending.length}<span class="kpi-unit">건</span>`;
+  $("qkpiSent").innerHTML = `${sent.length}<span class="kpi-unit">건</span>`;
+  
+  // 평균 작성 시간
+  const completed = esQuotes.filter(q => q.status === "sent_to_sales" && q.createdAt && q.sentAt);
+  if (completed.length > 0) {
+    const avgDays = completed.reduce((sum, q) => {
+      const days = (new Date(q.sentAt) - new Date(q.createdAt)) / (1000 * 60 * 60 * 24);
+      return sum + days;
+    }, 0) / completed.length;
+    $("qkpiAvgTime").innerHTML = `${avgDays.toFixed(1)}<span class="kpi-unit">일</span>`;
+  } else {
+    $("qkpiAvgTime").innerHTML = `-<span class="kpi-unit">일</span>`;
+  }
+  
+  // 필터링
+  const search = ($("quoteSearch")?.value || "").toLowerCase();
+  const statusFilter = $("quoteStatusFilter")?.value || "";
+  
+  let filtered = esQuotes.filter(q => {
+    if (statusFilter && q.status !== statusFilter) return false;
+    if (search) {
+      const text = `${q.title || ""} ${q.customer || ""} ${q.projectCode || ""}`.toLowerCase();
+      if (!text.includes(search)) return false;
+    }
+    return true;
+  });
+  
+  filtered.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+  
+  if (filtered.length === 0) {
+    $("quotesList").innerHTML = `
+      <div style="text-align:center;padding:60px 20px;color:var(--t3)">
+        <div style="font-size:48px;opacity:0.4;margin-bottom:12px">💰</div>
+        <div style="font-weight:700;color:var(--t2);margin-bottom:6px">${esQuotes.length === 0 ? "아직 작성된 견적이 없습니다" : "검색 결과가 없습니다"}</div>
+        ${esQuotes.length === 0 ? '<button class="btn" onclick="openQuoteNew()" style="margin-top:14px">+ 첫 견적 작성</button>' : ""}
+      </div>`;
+    return;
+  }
+  
+  $("quotesList").innerHTML = `
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>견적번호</th><th>프로젝트</th><th>고객사</th><th>PM</th>
+            <th class="right">BOM 합계</th><th class="right">총 견적가</th>
+            <th class="center">상태</th><th>작성일</th><th class="center">관리</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filtered.map(q => `
+            <tr class="clickable" onclick="openQuoteEdit('${q.id}')">
+              <td style="font-family:monospace;font-size:11px"><strong>${q.id}</strong></td>
+              <td class="cell-strong">${q.title || "-"}</td>
+              <td>${q.customer || "-"}</td>
+              <td>${q.pm || "-"}</td>
+              <td class="right">${formatMoney(q.summary?.bomTotal || 0)}</td>
+              <td class="right cell-strong" style="color:var(--p)">${formatMoney(q.summary?.total || 0)}</td>
+              <td class="center">${getQuoteStatusBadge(q.status)}</td>
+              <td>${formatDate(q.createdAt)}</td>
+              <td class="center"><button class="btn xs outline" onclick="event.stopPropagation();openQuoteEdit('${q.id}')">편집</button></td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function getQuoteStatusBadge(status) {
+  const map = {
+    "draft": ['📝 작성중', 'badge-blue'],
+    "bom_request": ['📤 단가요청', 'badge-orange'],
+    "bom_received": ['📥 단가수령', 'badge-purple'],
+    "labor_added": ['💼 인건비추가', 'badge-purple'],
+    "sent_to_sales": ['✅ 영업송부', 'badge-green'],
+    "cancelled": ['❌ 취소', 'badge-red']
+  };
+  const [label, cls] = map[status] || ['-', 'badge-gray'];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function openQuoteNew() {
+  editingQuoteId = null;
+  $("quoteModalTitle").textContent = "💰 견적서 신규 작성";
+  $("qDeleteBtn").style.display = "none";
+  $("qSendBtn").style.display = "none";
+  
+  // 견적 번호 자동 생성
+  const year = new Date().getFullYear();
+  const seqNum = esQuotes.filter(q => (q.id || "").startsWith(`ESQ-${year}`)).length + 1;
+  $("qF_id").value = `ESQ-${year}-${String(seqNum).padStart(3, "0")}`;
+  
+  // 프로젝트 셀렉트 채우기
+  populateProjectSelect();
+  
+  // 폼 초기화
+  $("qF_projectCode").value = "";
+  $("qF_customer").value = "";
+  $("qF_salesperson").value = "";
+  $("qF_pm").value = userName || "";
+  $("qF_title").value = "";
+  $("qF_dueDate").value = "";
+  $("qF_misc").value = "0";
+  $("qF_contingency").value = "0";
+  $("qF_note").value = "";
+  
+  currentBomItems = [];
+  currentLaborItems = [
+    { team: "SE", role: "설계", hours: 0, rate: LABOR_RATES["SE-설계"] }
+  ];
+  renderBomRows();
+  renderLaborRows();
+  recalcQuote();
+  
+  $("bomRequestStatus").style.display = "none";
+  $("modalQuote").classList.add("on");
+}
+
+function openQuoteEdit(id) {
+  const q = esQuotes.find(x => x.id === id);
+  if (!q) { toast("견적을 찾을 수 없습니다", "error"); return; }
+  
+  editingQuoteId = id;
+  $("quoteModalTitle").textContent = `💰 견적서 편집 - ${id}`;
+  $("qDeleteBtn").style.display = "inline-block";
+  
+  // 영업 송부 + 전자결재 버튼은 단가 수령 후에만
+  if (q.status === "bom_received" || q.status === "labor_added") {
+    $("qSendBtn").style.display = "inline-block";
+    $("qApprovalBtn").style.display = "inline-block";
+  } else {
+    $("qSendBtn").style.display = "none";
+    $("qApprovalBtn").style.display = q.status === "approval_pending" ? "none" : "none";
+  }
+  
+  populateProjectSelect();
+  
+  $("qF_id").value = q.id;
+  $("qF_projectCode").value = q.projectCode || "";
+  $("qF_customer").value = q.customer || "";
+  $("qF_salesperson").value = q.salesperson || "";
+  $("qF_pm").value = q.pm || "";
+  $("qF_title").value = q.title || "";
+  $("qF_dueDate").value = q.dueDate || "";
+  $("qF_misc").value = q.misc || 0;
+  $("qF_contingency").value = q.contingency || 0;
+  $("qF_note").value = q.note || "";
+  
+  currentBomItems = q.bom ? [...q.bom] : [];
+  currentLaborItems = q.labor ? [...q.labor] : [];
+  
+  renderBomRows();
+  renderLaborRows();
+  recalcQuote();
+  
+  // 단가 요청 상태 표시
+  if (q.status === "bom_request") {
+    $("bomRequestStatus").style.display = "block";
+    $("bomRequestStatus").innerHTML = `📤 <strong>구매팀에 단가 요청됨</strong> · 요청일: ${formatDate(q.bomRequestedAt)} · 회신 대기 중`;
+    $("bomRequestStatus").style.background = "var(--od)";
+    $("bomRequestStatus").style.color = "var(--y)";
+  } else if (q.status === "bom_received") {
+    $("bomRequestStatus").style.display = "block";
+    $("bomRequestStatus").innerHTML = `📥 <strong>구매팀 단가 회신 완료</strong> · 수령일: ${formatDate(q.bomReceivedAt)}`;
+    $("bomRequestStatus").style.background = "var(--gd)";
+    $("bomRequestStatus").style.color = "var(--g)";
+  } else {
+    $("bomRequestStatus").style.display = "none";
+  }
+  
+  $("modalQuote").classList.add("on");
+}
+
+function populateProjectSelect() {
+  const sel = $("qF_projectCode");
+  if (!sel) return;
+  // ES 프로젝트 + 영업활동 모두 포함
+  const allCodes = new Set();
+  const opts = [];
+  
+  esProjects.forEach(p => {
+    const code = p.salesCode || p.id;
+    if (code && !allCodes.has(code)) {
+      allCodes.add(code);
+      opts.push({ code, title: p.title, customer: p.customer, salesperson: p.salesperson });
+    }
+  });
+  
+  salesActivities.forEach(a => {
+    const code = a.projectCode || a.pjcode || a.code;
+    if (code && !allCodes.has(code)) {
+      allCodes.add(code);
+      opts.push({ 
+        code, 
+        title: a.projectName || a.subject || a.title || code, 
+        customer: a.company || a.customer,
+        salesperson: a.salesperson || a.manager 
+      });
+    }
+  });
+  
+  sel.innerHTML = '<option value="">선택...</option>' + 
+    opts.map(o => `<option value="${o.code}" data-customer="${o.customer || ""}" data-title="${o.title || ""}" data-sales="${o.salesperson || ""}">${o.code} - ${o.title}</option>`).join("");
+}
+
+function onProjectChange() {
+  const sel = $("qF_projectCode");
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) return;
+  
+  if (!$("qF_customer").value) $("qF_customer").value = opt.dataset.customer || "";
+  if (!$("qF_title").value) $("qF_title").value = opt.dataset.title || "";
+  if (!$("qF_salesperson").value) $("qF_salesperson").value = opt.dataset.sales || "";
+}
+
+// ━━ BOM 행 관리 ━━
+function renderBomRows() {
+  if (currentBomItems.length === 0) {
+    $("bomRows").innerHTML = `<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--t3);font-size:12px">부품을 추가하세요<br><br><button class="btn outline sm" onclick="addBomRow()">+ 부품 추가</button> 또는 <button class="btn outline sm" onclick="openBomPicker()">🔍 BOM 마스터 검색</button></td></tr>`;
+    $("bomSubtotal").textContent = "0";
+    return;
+  }
+  
+  $("bomRows").innerHTML = currentBomItems.map((b, i) => {
+    const qty = parseFloat(b.qty) || 0;
+    const price = parseFloat(b.unitPrice) || 0;
+    const total = qty * price;
+    const status = b.priceStatus === "received" ? "priced" : "pending";
+    return `
+      <tr>
+        <td class="center">${i + 1}</td>
+        <td><input type="text" value="${b.partNo || ""}" oninput="updateBomItem(${i},'partNo',this.value)"></td>
+        <td><input type="text" value="${b.name || ""}" oninput="updateBomItem(${i},'name',this.value)"></td>
+        <td><input type="text" value="${b.spec || ""}" oninput="updateBomItem(${i},'spec',this.value)"></td>
+        <td><input type="number" value="${qty}" oninput="updateBomItem(${i},'qty',this.value)" class="right"></td>
+        <td><input type="text" value="${b.unit || "EA"}" oninput="updateBomItem(${i},'unit',this.value)"></td>
+        <td class="price-cell ${status}">${b.unitPrice ? formatMoney(price) : '⏳대기'}</td>
+        <td class="total-cell">${total > 0 ? formatMoney(total) : '-'}</td>
+        <td class="center">${b.priceStatus === "received" ? '<span class="badge badge-green">수령</span>' : '<span class="badge badge-orange">대기</span>'}</td>
+        <td class="center"><button class="btn xs" style="background:var(--r)" onclick="removeBomRow(${i})">×</button></td>
+      </tr>
+    `;
+  }).join("");
+  
+  const subtotal = currentBomItems.reduce((s, b) => s + ((parseFloat(b.qty) || 0) * (parseFloat(b.unitPrice) || 0)), 0);
+  $("bomSubtotal").textContent = formatMoney(subtotal);
+}
+
+function addBomRow() {
+  currentBomItems.push({
+    partNo: "", name: "", spec: "", qty: 1, unit: "EA", 
+    unitPrice: 0, priceStatus: "pending", source: "manual"
+  });
+  renderBomRows();
+}
+
+function updateBomItem(i, field, value) {
+  if (!currentBomItems[i]) return;
+  currentBomItems[i][field] = value;
+  if (field === "qty" || field === "unitPrice") {
+    renderBomRows();
+    recalcQuote();
+  }
+}
+
+function removeBomRow(i) {
+  currentBomItems.splice(i, 1);
+  renderBomRows();
+  recalcQuote();
+}
+
+// ━━ BOM 마스터 검색 / 가져오기 ━━
+function openBomPicker() {
+  $("bomPickerSearch").value = "";
+  renderBomPickerList();
+  $("modalBomPicker").classList.add("on");
+}
+
+function renderBomPickerList() {
+  const search = ($("bomPickerSearch").value || "").toLowerCase();
+  let filtered = bomMaster;
+  if (search) {
+    filtered = bomMaster.filter(b => {
+      const text = `${b.partNo || ""} ${b.name || ""} ${b.spec || ""} ${b.partName || ""}`.toLowerCase();
+      return text.includes(search);
+    });
+  }
+  
+  if (filtered.length === 0) {
+    $("bomPickerList").innerHTML = `<div style="text-align:center;padding:40px;color:var(--t3)">${bomMaster.length === 0 ? "구매 모듈에 등록된 BOM이 없습니다" : "검색 결과가 없습니다"}</div>`;
+    return;
+  }
+  
+  $("bomPickerList").innerHTML = filtered.slice(0, 100).map(b => {
+    const name = b.name || b.partName || "-";
+    const partNo = b.partNo || "-";
+    const price = b.unitPrice || b.price || 0;
+    return `
+      <div class="bom-pick-item" onclick='pickBomItem(${JSON.stringify(b).replace(/'/g, "&#39;")})'>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-weight:700;font-size:13px">${name}</div>
+            <div style="font-size:11px;color:var(--t3)">${partNo} · ${b.spec || "-"} · ${b.unit || "EA"}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-weight:700;color:${price > 0 ? 'var(--p)' : 'var(--t3)'}">${price > 0 ? '₩' + formatMoney(price) : '단가 미등록'}</div>
+            <div style="font-size:10px;color:var(--t3)">${b.supplier || ""}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function pickBomItem(b) {
+  currentBomItems.push({
+    partNo: b.partNo || "",
+    name: b.name || b.partName || "",
+    spec: b.spec || "",
+    qty: 1,
+    unit: b.unit || "EA",
+    unitPrice: parseFloat(b.unitPrice || b.price || 0),
+    priceStatus: (b.unitPrice || b.price) > 0 ? "received" : "pending",
+    source: "bom_master",
+    supplier: b.supplier || ""
+  });
+  renderBomRows();
+  recalcQuote();
+  closeModal("modalBomPicker");
+  toast(`✅ ${b.name || b.partName} 추가됨`, "success");
+}
+
+// ━━ 인건비 행 관리 ━━
+function renderLaborRows() {
+  if (currentLaborItems.length === 0) {
+    $("laborRows").innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--t3);font-size:12px">인건비를 추가하세요<br><br><button class="btn outline sm" onclick="addLaborRow()" style="border-color:var(--g);color:var(--g)">+ 인력 추가</button></td></tr>`;
+    $("laborSubtotal").textContent = "0";
+    return;
+  }
+  
+  $("laborRows").innerHTML = currentLaborItems.map((l, i) => {
+    const hours = parseFloat(l.hours) || 0;
+    const rate = parseFloat(l.rate) || 0;
+    const amount = hours * rate;
+    return `
+      <tr>
+        <td>
+          <select onchange="updateLaborItem(${i},'team',this.value);updateLaborRate(${i})">
+            <option value="SE" ${l.team==='SE'?'selected':''}>🔧 SE</option>
+            <option value="PE" ${l.team==='PE'?'selected':''}>🧪 PE</option>
+            <option value="AE" ${l.team==='AE'?'selected':''}>🛠️ AE</option>
+          </select>
+        </td>
+        <td>
+          <select onchange="updateLaborItem(${i},'role',this.value);updateLaborRate(${i})">
+            ${getRoleOptions(l.team).map(r => `<option value="${r}" ${l.role===r?'selected':''}>${r}</option>`).join("")}
+          </select>
+        </td>
+        <td><input type="number" value="${hours}" oninput="updateLaborItem(${i},'hours',this.value)" class="right" step="0.5"></td>
+        <td><input type="number" value="${rate}" oninput="updateLaborItem(${i},'rate',this.value)" class="right"></td>
+        <td class="right cell-strong" style="color:var(--g)">${formatMoney(amount)}</td>
+        <td class="center"><button class="btn xs" style="background:var(--r)" onclick="removeLaborRow(${i})">×</button></td>
+      </tr>
+    `;
+  }).join("");
+  
+  const subtotal = currentLaborItems.reduce((s, l) => s + ((parseFloat(l.hours) || 0) * (parseFloat(l.rate) || 0)), 0);
+  $("laborSubtotal").textContent = formatMoney(subtotal);
+}
+
+function getRoleOptions(team) {
+  if (team === "SE") return ["설계", "PM", "전장설계", "기구설계", "제안서"];
+  if (team === "PE") return ["테스트", "개발", "공정개발", "샘플분석"];
+  if (team === "AE") return ["설치", "CS", "출장", "시운전", "교육"];
+  return ["기타"];
+}
+
+function addLaborRow() {
+  currentLaborItems.push({ team: "SE", role: "설계", hours: 0, rate: LABOR_RATES["SE-설계"] });
+  renderLaborRows();
+}
+
+function updateLaborItem(i, field, value) {
+  if (!currentLaborItems[i]) return;
+  currentLaborItems[i][field] = value;
+  if (field === "hours" || field === "rate") {
+    renderLaborRows();
+    recalcQuote();
+  }
+}
+
+function updateLaborRate(i) {
+  if (!currentLaborItems[i]) return;
+  const key = `${currentLaborItems[i].team}-${currentLaborItems[i].role}`;
+  if (LABOR_RATES[key]) {
+    currentLaborItems[i].rate = LABOR_RATES[key];
+    renderLaborRows();
+    recalcQuote();
+  }
+}
+
+function removeLaborRow(i) {
+  currentLaborItems.splice(i, 1);
+  renderLaborRows();
+  recalcQuote();
+}
+
+// ━━ 견적 합계 재계산 ━━
+function recalcQuote() {
+  const bomTotal = currentBomItems.reduce((s, b) => s + ((parseFloat(b.qty) || 0) * (parseFloat(b.unitPrice) || 0)), 0);
+  const laborTotal = currentLaborItems.reduce((s, l) => s + ((parseFloat(l.hours) || 0) * (parseFloat(l.rate) || 0)), 0);
+  const misc = parseFloat($("qF_misc").value) || 0;
+  const contPct = parseFloat($("qF_contingency").value) || 0;
+  const subtotal = bomTotal + laborTotal + misc;
+  const contingency = Math.floor(subtotal * contPct / 100);
+  const total = subtotal + contingency;
+  
+  $("sumBom").textContent = `${formatMoney(bomTotal)}원`;
+  $("sumLabor").textContent = `${formatMoney(laborTotal)}원`;
+  $("sumMisc").textContent = `${formatMoney(misc)}원`;
+  $("sumContingency").textContent = `${formatMoney(contingency)}원`;
+  $("sumTotal").textContent = `${formatMoney(total)}원`;
+  
+  return { bomTotal, laborTotal, misc, contingency, total };
+}
+
+// ━━ 견적 저장 ━━
+async function saveQuote(targetStatus) {
+  const projectCode = $("qF_projectCode").value;
+  if (!projectCode) { toast("프로젝트 코드를 선택하세요", "error"); return; }
+  
+  const summary = recalcQuote();
+  
+  const data = {
+    id: $("qF_id").value,
+    projectCode,
+    customer: $("qF_customer").value,
+    salesperson: $("qF_salesperson").value,
+    pm: $("qF_pm").value,
+    title: $("qF_title").value,
+    dueDate: $("qF_dueDate").value,
+    bom: currentBomItems,
+    labor: currentLaborItems,
+    misc: parseFloat($("qF_misc").value) || 0,
+    contingency: parseFloat($("qF_contingency").value) || 0,
+    summary: {
+      bomTotal: summary.bomTotal,
+      laborTotal: summary.laborTotal,
+      misc: summary.misc,
+      contingencyAmount: summary.contingency,
+      total: summary.total
+    },
+    note: $("qF_note").value,
+    status: targetStatus || "draft",
+    updatedAt: new Date().toISOString(),
+    updatedBy: userEmail
+  };
+  
+  if (editingQuoteId) {
+    const idx = esQuotes.findIndex(q => q.id === editingQuoteId);
+    if (idx >= 0) esQuotes[idx] = { ...esQuotes[idx], ...data };
+  } else {
+    data.createdAt = new Date().toISOString();
+    data.createdBy = userEmail;
+    esQuotes.push(data);
+  }
+  
+  try {
+    await saveJson(ES_QUOTES_PATH, { quotes: esQuotes, lastUpdate: new Date().toISOString() });
+    toast("✅ 견적 저장 완료", "success");
+    return true;
+  } catch (e) {
+    toast("저장 실패: " + e.message, "error");
+    return false;
+  }
+}
+
+// ━━ 구매팀 단가 요청 ━━
+async function requestBomPricing() {
+  // 단가가 미입력된 부품들
+  const pendingItems = currentBomItems.filter(b => !b.unitPrice || parseFloat(b.unitPrice) === 0);
+  if (pendingItems.length === 0) {
+    toast("모든 부품에 단가가 이미 입력되어 있습니다", "warn");
+    return;
+  }
+  
+  if (!confirm(`구매팀에 ${pendingItems.length}개 부품의 단가를 요청하시겠습니까?\n\n구매팀이 단가를 입력하면 자동으로 견적에 반영됩니다.`)) return;
+  
+  // 단가 요청 정보 저장
+  const data = {
+    id: $("qF_id").value,
+    quoteId: $("qF_id").value,
+    projectCode: $("qF_projectCode").value,
+    customer: $("qF_customer").value,
+    requestedBy: userEmail,
+    requestedAt: new Date().toISOString(),
+    status: "pending",
+    items: pendingItems.map(b => ({
+      partNo: b.partNo, name: b.name, spec: b.spec, 
+      qty: b.qty, unit: b.unit
+    })),
+    note: `ES 견적서 [${$("qF_id").value}] 단가 요청. PM: ${$("qF_pm").value}`
+  };
+  
+  // BOM 요청 리스트에 추가
+  esBomRequests.push(data);
+  
+  try {
+    await saveJson(ES_BOM_REQUESTS_PATH, { requests: esBomRequests, lastUpdate: new Date().toISOString() });
+    
+    // 견적 상태 변경
+    const saved = await saveQuote("bom_request");
+    if (saved) {
+      // 견적에 bomRequestedAt 추가
+      const idx = esQuotes.findIndex(q => q.id === $("qF_id").value);
+      if (idx >= 0) {
+        esQuotes[idx].bomRequestedAt = new Date().toISOString();
+        await saveJson(ES_QUOTES_PATH, { quotes: esQuotes, lastUpdate: new Date().toISOString() });
+      }
+      
+      toast(`✅ 구매팀에 단가 요청 완료 (${pendingItems.length}건)`, "success");
+      closeModal("modalQuote");
+      renderQuotes();
+    }
+  } catch (e) {
+    toast("요청 실패: " + e.message, "error");
+  }
+}
+
+// ━━ 영업 송부 ━━
+async function sendToSales() {
+  // 단가 미입력된 부품 체크
+  const pendingItems = currentBomItems.filter(b => !b.unitPrice || parseFloat(b.unitPrice) === 0);
+  if (pendingItems.length > 0) {
+    if (!confirm(`단가 미입력 부품이 ${pendingItems.length}개 있습니다. 그래도 영업에 송부하시겠습니까?`)) return;
+  }
+  
+  const projectCode = $("qF_projectCode").value;
+  const summary = recalcQuote();
+  
+  if (!confirm(`다음 견적을 영업팀에 송부하시겠습니까?\n\n프로젝트: ${projectCode}\nES 산출 원가: ${formatMoney(summary.total)}원\n\n→ 영업이 마진을 추가하여 고객 견적서를 작성합니다.`)) return;
+  
+  // 저장 + 상태 변경
+  const saved = await saveQuote("sent_to_sales");
+  if (saved) {
+    // sentAt 추가
+    const idx = esQuotes.findIndex(q => q.id === $("qF_id").value);
+    if (idx >= 0) {
+      esQuotes[idx].sentAt = new Date().toISOString();
+      esQuotes[idx].sentBy = userEmail;
+      await saveJson(ES_QUOTES_PATH, { quotes: esQuotes, lastUpdate: new Date().toISOString() });
+      
+      // ⭐ Teams 채널에 자동 게시
+      try {
+        await postQuoteToChannel(esQuotes[idx].id);
+      } catch (e) {
+        console.warn("채널 게시 실패 (계속 진행):", e);
+      }
+    }
+    
+    toast(`✅ 영업팀에 송부 완료 + Teams 채널 게시`, "success");
+    closeModal("modalQuote");
+    renderQuotes();
+  }
+}
+
+async function deleteQuote() {
+  if (!editingQuoteId) return;
+  if (!confirm("이 견적을 삭제하시겠습니까?")) return;
+  esQuotes = esQuotes.filter(q => q.id !== editingQuoteId);
+  try {
+    await saveJson(ES_QUOTES_PATH, { quotes: esQuotes, lastUpdate: new Date().toISOString() });
+    toast("삭제 완료", "success");
+    closeModal("modalQuote");
+    renderQuotes();
+  } catch (e) { toast("삭제 실패: " + e.message, "error"); }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// BOM 마스터 화면 (구매 모듈 데이터 표시)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function renderBomMaster() {
+  $("bomTotal").innerHTML = `${bomMaster.length}<span class="kpi-unit">건</span>`;
+  
+  const priced = bomMaster.filter(b => parseFloat(b.unitPrice || b.price || 0) > 0);
+  const noPrice = bomMaster.length - priced.length;
+  
+  $("bomPriced").innerHTML = `${priced.length}<span class="kpi-unit">건</span>`;
+  $("bomNoPrice").innerHTML = `${noPrice}<span class="kpi-unit">건</span>`;
+  
+  const search = ($("bomSearch")?.value || "").toLowerCase();
+  let filtered = bomMaster;
+  if (search) {
+    filtered = bomMaster.filter(b => {
+      const text = `${b.partNo || ""} ${b.name || ""} ${b.partName || ""} ${b.spec || ""}`.toLowerCase();
+      return text.includes(search);
+    });
+  }
+  
+  if (filtered.length === 0) {
+    $("bomList").innerHTML = `
+      <div style="text-align:center;padding:60px 20px;color:var(--t3)">
+        <div style="font-size:48px;opacity:0.4;margin-bottom:12px">📋</div>
+        <div style="font-weight:700;color:var(--t2);margin-bottom:6px">${bomMaster.length === 0 ? "구매 모듈에 등록된 BOM이 없습니다" : "검색 결과가 없습니다"}</div>
+        <div style="font-size:12px">구매 모듈의 [품목마스터]에서 등록한 BOM이 여기에 자동 표시됩니다</div>
+      </div>`;
+    return;
+  }
+  
+  $("bomList").innerHTML = `
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>품목코드</th><th>품목명</th><th>규격</th><th>단위</th><th class="right">단가</th><th>공급사</th><th class="center">상태</th></tr></thead>
+        <tbody>
+          ${filtered.slice(0, 200).map(b => {
+            const price = parseFloat(b.unitPrice || b.price || 0);
+            return `
+              <tr>
+                <td style="font-family:monospace;font-size:11px">${b.partNo || "-"}</td>
+                <td class="cell-strong">${b.name || b.partName || "-"}</td>
+                <td>${b.spec || "-"}</td>
+                <td>${b.unit || "EA"}</td>
+                <td class="right cell-strong">${price > 0 ? '₩' + formatMoney(price) : '<span style="color:var(--t3)">미등록</span>'}</td>
+                <td style="font-size:11px">${b.supplier || b.vendor || "-"}</td>
+                <td class="center">${price > 0 ? '<span class="badge badge-green">등록</span>' : '<span class="badge badge-orange">미등록</span>'}</td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+    ${filtered.length > 200 ? `<div style="text-align:center;padding:14px;color:var(--t3);font-size:12px">상위 200개만 표시 · 검색을 사용하세요</div>` : ""}
+  `;
+}
+
+function closeModal(id) { $(id).classList.remove("on"); }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Teams 채널 자동 동기화 엔진 (Phase 3)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+let autoSyncEnabled = true;
+let autoSyncInterval = null;
+const SYNC_INTERVAL_MS = 5 * 60 * 1000;  // 5분
+
+function startAutoSync() {
+  if (autoSyncInterval) clearInterval(autoSyncInterval);
+  if (!autoSyncEnabled) return;
+  
+  // 초기 1회 실행 (3초 후, 데이터 로드 후)
+  setTimeout(() => syncTeamsChannels(), 3000);
+  
+  // 5분마다 반복
+  autoSyncInterval = setInterval(() => syncTeamsChannels(), SYNC_INTERVAL_MS);
+  console.log("[ES] 자동 동기화 시작 (5분 주기)");
+}
+
+function stopAutoSync() {
+  if (autoSyncInterval) clearInterval(autoSyncInterval);
+  autoSyncInterval = null;
+  console.log("[ES] 자동 동기화 중지");
+}
+
+function toggleAutoSync() {
+  autoSyncEnabled = !autoSyncEnabled;
+  if (autoSyncEnabled) {
+    startAutoSync();
+    $("autoSyncBtn").textContent = "⏸️ 자동 동기화 끄기";
+    toast("✅ 자동 동기화 활성화 (5분 주기)", "success");
+  } else {
+    stopAutoSync();
+    $("autoSyncBtn").textContent = "▶️ 자동 동기화 켜기";
+    toast("⏸️ 자동 동기화 중지", "warn");
+  }
+}
+
+async function manualSync() {
+  if (syncInProgress) {
+    toast("이미 동기화 중입니다...", "warn");
+    return;
+  }
+  await syncTeamsChannels(true);
+}
+
+// ━━ 메인 동기화 함수 ━━
+async function syncTeamsChannels(verbose = false) {
+  if (syncInProgress) return;
+  syncInProgress = true;
+  
+  try {
+    if (verbose) toast("🔄 동기화 시작...");
+    
+    // 1. 최신 데이터 로드
+    await loadAllData();
+    
+    // 2. 채널 생성 대상 식별
+    const targetProjects = salesActivities.filter(a => {
+      const code = a.projectCode || a.pjcode || a.code;
+      if (!code) return false;
+      if (a.status === "중단" || a.status === "취소" || a.status === "실패") return false;
+      return true;
+    });
+    
+    let stats = { created: 0, updated: 0, deleted: 0, archived: 0, errors: 0 };
+    
+    // 3. 새로 생성할 채널 + 이름 변경 체크
+    for (const sa of targetProjects) {
+      const code = sa.projectCode || sa.pjcode || sa.code;
+      const expectedName = buildChannelName(sa);
+      const mapped = channelMap[code];
+      
+      try {
+        if (!mapped) {
+          // 신규 채널 생성
+          const channel = await createProjectChannel(sa);
+          if (channel) {
+            channelMap[code] = {
+              channelId: channel.id,
+              teamId: TEAMS_PROJECT_ACTIVE,
+              channelName: expectedName,
+              projectCode: code,
+              customer: sa.company || sa.customer || "",
+              projectName: sa.projectName || sa.subject || "",
+              createdAt: new Date().toISOString(),
+              status: "active"
+            };
+            stats.created++;
+            
+            // ES 프로젝트로도 자동 추가
+            ensureEsProject(sa);
+          }
+        } else if (mapped.channelName !== expectedName && mapped.status === "active") {
+          // 이름 변경
+          try {
+            await renameProjectChannel(mapped.channelId, expectedName);
+            mapped.channelName = expectedName;
+            mapped.updatedAt = new Date().toISOString();
+            mapped.customer = sa.company || sa.customer || mapped.customer;
+            mapped.projectName = sa.projectName || sa.subject || mapped.projectName;
+            stats.updated++;
+          } catch (e) {
+            console.error(`채널 이름 변경 실패 [${code}]:`, e);
+            stats.errors++;
+          }
+        }
+      } catch (e) {
+        console.error(`동기화 실패 [${code}]:`, e);
+        stats.errors++;
+      }
+    }
+    
+    // 4. 영업에서 삭제/중단된 프로젝트 → 채널 삭제 (Archive 이동 안 함, 옵션 A 선택)
+    // Q1 답변: "A. 완전 삭제 (채널과 데이터 모두 삭제)"
+    const currentProjectCodes = new Set(targetProjects.map(sa => sa.projectCode || sa.pjcode || sa.code));
+    
+    for (const code of Object.keys(channelMap)) {
+      const mapped = channelMap[code];
+      if (mapped.status === "deleted") continue;  // 이미 처리됨
+      
+      // 영업에 더 이상 없거나 중단됨
+      const stillExists = currentProjectCodes.has(code);
+      const sa = salesActivities.find(a => (a.projectCode || a.pjcode || a.code) === code);
+      const isCancelled = sa && (sa.status === "중단" || sa.status === "취소" || sa.status === "실패");
+      
+      if (!stillExists || isCancelled) {
+        try {
+          // ⚠️ 채널 완전 삭제 (BH님 선택)
+          if (confirm) {
+            // 자동 동기화에서는 confirm 없이 진행 (verbose=true일 때만 확인)
+          }
+          await deleteProjectChannel(mapped.channelId);
+          mapped.status = "deleted";
+          mapped.deletedAt = new Date().toISOString();
+          mapped.deletedReason = isCancelled ? `영업 상태: ${sa.status}` : "영업에서 삭제됨";
+          stats.deleted++;
+        } catch (e) {
+          console.error(`채널 삭제 실패 [${code}]:`, e);
+          stats.errors++;
+        }
+      }
+    }
+    
+    // 5. 저장
+    await saveJson(ES_CHANNEL_MAP_PATH, { 
+      map: channelMap, 
+      lastSync: new Date().toISOString(),
+      stats
+    });
+    
+    // ES 프로젝트도 저장 (신규 추가됐을 수 있음)
+    if (stats.created > 0) {
+      await saveJson(ES_PROJECTS_PATH, { 
+        projects: esProjects, 
+        lastUpdate: new Date().toISOString() 
+      });
+    }
+    
+    lastSyncAt = new Date().toISOString();
+    
+    // 동기화 로그 추가
+    try {
+      const log = await fetchJson(ES_SYNC_LOG_PATH);
+      const logs = log?.logs || [];
+      logs.unshift({
+        time: lastSyncAt,
+        user: userEmail,
+        stats,
+        type: verbose ? "manual" : "auto"
+      });
+      // 최근 100건만 보관
+      await saveJson(ES_SYNC_LOG_PATH, { 
+        logs: logs.slice(0, 100),
+        lastSync: lastSyncAt
+      });
+    } catch (e) {}
+    
+    // UI 업데이트
+    renderDashboard();
+    
+    const msg = `✅ 동기화 완료 · 생성 ${stats.created} · 수정 ${stats.updated} · 삭제 ${stats.deleted} · 오류 ${stats.errors}`;
+    console.log("[ES Sync]", msg);
+    if (verbose || stats.created > 0 || stats.deleted > 0) {
+      toast(msg, stats.errors > 0 ? "warn" : "success");
+    }
+    
+  } catch (e) {
+    console.error("[ES Sync] 실패:", e);
+    if (verbose) toast("동기화 실패: " + e.message, "error");
+  } finally {
+    syncInProgress = false;
+  }
+}
+
+// ━━ 채널 이름 빌드 ━━
+function buildChannelName(sa) {
+  const year = sa.year || new Date(sa.createdAt || Date.now()).getFullYear();
+  const customer = sa.company || sa.customer || sa.customerName || "고객사";
+  const projectCode = sa.projectCode || sa.pjcode || sa.code || "";
+  const projectName = sa.projectName || sa.subject || sa.title || "";
+  
+  // 형식: [2026][고객사][프로젝트번호][프로젝트명]
+  let name = `[${year}][${customer}][${projectCode}][${projectName}]`;
+  
+  // Teams 채널 이름은 50자 제한
+  if (name.length > 50) {
+    name = name.substring(0, 47) + "...";
+  }
+  
+  // 특수문자 제거 (Teams 제약)
+  // 허용: 한글, 영문, 숫자, [, ], 공백, _, -
+  name = name.replace(/[#%&*:<>?/\\{|}~"]/g, "_");
+  
+  return name;
+}
+
+// ━━ 채널 생성 ━━
+async function createProjectChannel(sa) {
+  const token = await getToken();
+  const displayName = buildChannelName(sa);
+  const description = `프로젝트: ${sa.projectName || sa.subject || ""}\n고객사: ${sa.company || sa.customer || ""}\n영업담당: ${sa.salesperson || sa.manager || ""}\n생성: ES사업부 모듈 자동`;
+  
+  console.log("[ES] 채널 생성 시도:", displayName);
+  
+  const r = await fetch(`https://graph.microsoft.com/v1.0/teams/${TEAMS_PROJECT_ACTIVE}/channels`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      displayName: displayName,
+      description: description.substring(0, 1024),
+      membershipType: "standard"  // 팀 전체가 볼 수 있음
+    })
+  });
+  
+  if (!r.ok) {
+    const errText = await r.text();
+    // 이미 존재하는 경우 - 기존 채널 찾기
+    if (errText.includes("alreadyExists") || errText.includes("already exists") || r.status === 409) {
+      console.log("[ES] 채널이 이미 존재함, 검색 중...");
+      const existing = await findChannelByName(displayName);
+      if (existing) {
+        console.log("[ES] 기존 채널 매핑:", existing.id);
+        return existing;
+      }
+    }
+    throw new Error(`채널 생성 실패 (${r.status}): ${errText.substring(0,200)}`);
+  }
+  
+  const channel = await r.json();
+  console.log("[ES] 채널 생성 성공:", channel.id);
+  
+  // 채널 생성 직후 환영 메시지 게시
+  try {
+    await postWelcomeMessage(channel.id, sa);
+  } catch (e) {
+    console.warn("[ES] 환영 메시지 실패:", e);
+  }
+  
+  return channel;
+}
+
+// ━━ 채널 이름 검색 ━━
+async function findChannelByName(name) {
+  const token = await getToken();
+  try {
+    const r = await fetch(`https://graph.microsoft.com/v1.0/teams/${TEAMS_PROJECT_ACTIVE}/channels`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (!r.ok) return null;
+    const data = await r.json();
+    return (data.value || []).find(c => c.displayName === name);
+  } catch (e) { return null; }
+}
+
+// ━━ 채널 이름 변경 ━━
+async function renameProjectChannel(channelId, newName) {
+  const token = await getToken();
+  
+  const r = await fetch(`https://graph.microsoft.com/v1.0/teams/${TEAMS_PROJECT_ACTIVE}/channels/${channelId}`, {
+    method: "PATCH",
+    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ displayName: newName })
+  });
+  
+  if (!r.ok) {
+    const errText = await r.text();
+    throw new Error(`이름 변경 실패 (${r.status}): ${errText.substring(0,200)}`);
+  }
+  console.log("[ES] 채널 이름 변경 완료:", newName);
+}
+
+// ━━ 채널 삭제 ━━
+async function deleteProjectChannel(channelId) {
+  const token = await getToken();
+  
+  const r = await fetch(`https://graph.microsoft.com/v1.0/teams/${TEAMS_PROJECT_ACTIVE}/channels/${channelId}`, {
+    method: "DELETE",
+    headers: { "Authorization": `Bearer ${token}` }
+  });
+  
+  if (!r.ok && r.status !== 404) {
+    const errText = await r.text();
+    throw new Error(`삭제 실패 (${r.status}): ${errText.substring(0,200)}`);
+  }
+  console.log("[ES] 채널 삭제 완료:", channelId);
+}
+
+// ━━ 환영 메시지 ━━
+async function postWelcomeMessage(channelId, sa) {
+  const code = sa.projectCode || sa.pjcode || sa.code;
+  const html = `
+    <div>
+      <p><b>🎉 ES사업부 프로젝트 채널 생성됨</b></p>
+      <table border="1" cellpadding="6" style="border-collapse:collapse;font-family:'Segoe UI',sans-serif;font-size:12px">
+        <tr><td style="background:#f5f5f5"><b>프로젝트 코드</b></td><td>${code}</td></tr>
+        <tr><td style="background:#f5f5f5"><b>고객사</b></td><td>${sa.company || sa.customer || "-"}</td></tr>
+        <tr><td style="background:#f5f5f5"><b>프로젝트명</b></td><td>${sa.projectName || sa.subject || "-"}</td></tr>
+        <tr><td style="background:#f5f5f5"><b>영업담당</b></td><td>${sa.salesperson || sa.manager || "-"}</td></tr>
+        <tr><td style="background:#f5f5f5"><b>현재 상태</b></td><td>${sa.status || "신규"}</td></tr>
+      </table>
+      <p style="margin-top:10px"><i>이 채널은 ES사업부 시스템에서 자동 생성되었습니다.</i></p>
+      <p style="font-size:11px;color:#666">📌 SE팀: 견적/도면 작성 · 🧪 PE팀: 테스트 · 🛠️ AE팀: CS/현장</p>
+    </div>
+  `;
+  
+  return postChannelMessage(channelId, html);
+}
+
+// ━━ 채널에 메시지 게시 (공통) ━━
+async function postChannelMessage(channelId, html) {
+  const token = await getToken();
+  const r = await fetch(`https://graph.microsoft.com/v1.0/teams/${TEAMS_PROJECT_ACTIVE}/channels/${channelId}/messages`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      body: { contentType: "html", content: html }
+    })
+  });
+  if (!r.ok) {
+    const errText = await r.text();
+    throw new Error(`${r.status}: ${errText.substring(0,200)}`);
+  }
+  return await r.json();
+}
+
+// ━━ ES 프로젝트 자동 생성 (영업활동 기반) ━━
+function ensureEsProject(sa) {
+  const code = sa.projectCode || sa.pjcode || sa.code;
+  if (!code) return;
+  
+  const existing = esProjects.find(p => p.salesCode === code || p.id === code);
+  if (existing) {
+    existing.syncedAt = new Date().toISOString();
+    return;
+  }
+  
+  esProjects.push({
+    id: code,
+    salesCode: code,
+    salesId: sa.id,
+    title: sa.projectName || sa.subject || sa.title || code,
+    customer: sa.company || sa.customer || sa.customerName || "-",
+    pm: sa.pm || "-",
+    salesperson: sa.salesperson || sa.manager || sa.owner || "",
+    status: mapSalesStatusToES(sa.status),
+    progress: 0,
+    startDate: sa.startDate || sa.regDate || sa.createdAt,
+    endDate: sa.endDate || sa.dueDate || "",
+    teams: ["SE", "PE", "AE"],
+    meta: {
+      salesStage: sa.status,
+      amount: sa.amount || 0
+    },
+    createdAt: new Date().toISOString(),
+    syncedAt: new Date().toISOString()
+  });
+}
+
+// ━━ 견적 완료 시 채널에 자동 게시 ━━
+async function postQuoteToChannel(quoteId) {
+  const quote = esQuotes.find(q => q.id === quoteId);
+  if (!quote) return;
+  
+  const channel = channelMap[quote.projectCode];
+  if (!channel || channel.status !== "active") {
+    console.log("[ES] 채널 매핑 없음, 게시 스킵");
+    return;
+  }
+  
+  const html = `
+    <div>
+      <p><b>💰 ES 견적 작성 완료</b></p>
+      <table border="1" cellpadding="6" style="border-collapse:collapse;font-family:'Segoe UI',sans-serif;font-size:12px">
+        <tr><td style="background:#f5f5f5"><b>견적 번호</b></td><td>${quote.id}</td></tr>
+        <tr><td style="background:#f5f5f5"><b>BOM 합계</b></td><td>₩${formatMoney(quote.summary?.bomTotal || 0)}</td></tr>
+        <tr><td style="background:#f5f5f5"><b>인건비</b></td><td>₩${formatMoney(quote.summary?.laborTotal || 0)}</td></tr>
+        <tr><td style="background:#f5f5f5"><b>부대비용</b></td><td>₩${formatMoney(quote.summary?.misc || 0)}</td></tr>
+        <tr><td style="background:#f5f5f5"><b>예비비</b></td><td>₩${formatMoney(quote.summary?.contingencyAmount || 0)}</td></tr>
+        <tr style="background:#dbeafe"><td><b>💰 ES 산출 원가</b></td><td><b>₩${formatMoney(quote.summary?.total || 0)}</b></td></tr>
+      </table>
+      <p style="margin-top:8px"><i>영업팀이 마진을 추가하여 고객 견적서를 작성합니다.</i></p>
+    </div>
+  `;
+  
+  try {
+    await postChannelMessage(channel.channelId, html);
+    console.log("[ES] 견적 게시 완료:", quote.id);
+  } catch (e) {
+    console.warn("[ES] 견적 게시 실패:", e);
+  }
+}
+
+// ━━ 채널 바로가기 URL ━━
+function getChannelUrl(projectCode) {
+  const channel = channelMap[projectCode];
+  if (!channel || channel.status !== "active") return null;
+  return `https://teams.microsoft.com/l/channel/${encodeURIComponent(channel.channelId)}/${encodeURIComponent(channel.channelName)}?groupId=${TEAMS_PROJECT_ACTIVE}&tenantId=${TENANT_ID}`;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Phase 4-A: SE팀 탭 렌더링 (영업 Todo + 도면)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function renderSETab() {
+  // KPI
+  const seProjects = esProjects.filter(p => {
+    if (!p.status || p.status === "취소") return false;
+    return (p.teams || []).includes("SE") || (p.assignedTeams || []).includes("SE") || !p.teams;
+  });
+  
+  // 영업 Todo (담당:ES 또는 ES사업부)
+  const esTodos = salesTodos.filter(t => {
+    if (t.status === "완료" || t.status === "completed" || t.status === "done") return false;
+    const dept = (t.assignedDept || t.dept || t.department || "").toString();
+    const assignee = (t.assignee || t.owner || "").toString();
+    return dept.includes("ES") || assignee.includes("ES");
+  });
+  
+  // 견적 작성중
+  const draftQuotes = esQuotes.filter(q => ["draft","bom_request","bom_received","labor_added","approval_pending"].includes(q.status));
+  
+  $("seKpiProj").innerHTML = `${seProjects.length}<span class="kpi-unit">건</span>`;
+  $("seKpiTodo").innerHTML = `${esTodos.length}<span class="kpi-unit">건</span>`;
+  $("seKpiQuote").innerHTML = `${draftQuotes.length}<span class="kpi-unit">건</span>`;
+  $("seKpiDraw").innerHTML = `0<span class="kpi-unit">건</span>`;  // 도면 데이터 따로 로드
+  
+  // 영업 Todo 목록
+  if (esTodos.length === 0) {
+    $("seTodoList").innerHTML = `<div style="padding:40px;text-align:center;color:var(--t3);background:var(--bg3);border-radius:8px">
+      <div style="font-size:32px;opacity:0.4;margin-bottom:8px">📥</div>
+      <div style="font-weight:700">영업 → ES 대기 Todo 없음</div>
+      <div style="font-size:12px;margin-top:4px">영업이 ES사업부에 작업을 배정하면 여기에 표시됩니다</div>
+    </div>`;
+  } else {
+    $("seTodoList").innerHTML = `<div class="tbl-wrap"><table>
+      <thead><tr><th>프로젝트</th><th>제목</th><th>고객사</th><th>담당</th><th>요청일</th><th class="center">상태</th><th class="center">조치</th></tr></thead>
+      <tbody>${esTodos.map(t => `
+        <tr>
+          <td style="font-family:monospace;font-size:11px">${t.projectCode || t.pjcode || "-"}</td>
+          <td class="cell-strong">${t.title || t.subject || t.task || "(제목 없음)"}</td>
+          <td>${t.company || t.customer || "-"}</td>
+          <td>${t.assignee || t.owner || "-"}</td>
+          <td>${formatDate(t.createdAt || t.regDate)}</td>
+          <td class="center"><span class="badge badge-orange">${t.status || "대기"}</span></td>
+          <td class="center">
+            <button class="btn xs success" onclick="completeSalesTodo('${t.id}')">✅ 완료</button>
+          </td>
+        </tr>
+      `).join("")}</tbody></table></div>`;
+  }
+  
+  // 도면 목록 (별도 fetchJson 호출)
+  loadDrawings();
+}
+
+async function loadDrawings() {
+  const dr = await fetchJson(ES_DRAWINGS_PATH);
+  const drawings = dr?.drawings || dr?.items || [];
+  
+  $("seKpiDraw").innerHTML = `${drawings.length}<span class="kpi-unit">건</span>`;
+  
+  if (drawings.length === 0) {
+    $("seDrawingList").innerHTML = `<div style="padding:40px;text-align:center;color:var(--t3);background:var(--bg3);border-radius:8px">
+      <div style="font-size:32px;opacity:0.4;margin-bottom:8px">📐</div>
+      <div style="font-weight:700">등록된 도면이 없습니다</div>
+      <div style="font-size:12px;margin-top:4px">Cloudium 도면의 URL과 대표 이미지를 등록하세요</div>
+    </div>`;
+    return;
+  }
+  
+  $("seDrawingList").innerHTML = `<div class="tbl-wrap"><table>
+    <thead><tr><th>프로젝트</th><th>종류</th><th>도면명</th><th>버전</th><th>등록일</th><th class="center">바로가기</th></tr></thead>
+    <tbody>${drawings.map(d => `
+      <tr>
+        <td style="font-family:monospace;font-size:11px">${d.projectCode || "-"}</td>
+        <td>${d.type === "기구" ? "🔧" : d.type === "전장" ? "⚡" : "📄"} ${d.type || "-"}</td>
+        <td class="cell-strong">${d.name || "-"}</td>
+        <td>${d.version || "v1.0"}</td>
+        <td>${formatDate(d.createdAt)}</td>
+        <td class="center">${d.url ? `<a href="${d.url}" target="_blank" class="badge badge-blue" style="text-decoration:none">📐 열기</a>` : '-'}</td>
+      </tr>
+    `).join("")}</tbody></table></div>`;
+}
+
+// 영업 Todo 완료 처리 (양방향 동기화)
+async function completeSalesTodo(todoId) {
+  const todo = salesTodos.find(t => t.id === todoId);
+  if (!todo) return;
+  
+  if (!confirm(`이 Todo를 완료 처리하시겠습니까?\n\n"${todo.title || todo.task}"\n\n영업 모듈에서도 자동으로 완료 표시됩니다.`)) return;
+  
+  todo.status = "완료";
+  todo.completedAt = new Date().toISOString();
+  todo.completedBy = userEmail;
+  todo.completedFromES = true;  // ES에서 완료한 표시
+  
+  try {
+    await saveJson(SALES_TODOS_PATH, { todos: salesTodos, lastUpdate: new Date().toISOString() });
+    
+    // Teams 채널에 게시
+    const channel = channelMap[todo.projectCode || todo.pjcode];
+    if (channel && channel.status === "active") {
+      try {
+        await postChannelMessage(channel.channelId, `
+          <div>
+            <p><b>✅ ES Todo 완료</b></p>
+            <table border="1" cellpadding="6" style="border-collapse:collapse;font-family:'Segoe UI',sans-serif;font-size:12px">
+              <tr><td style="background:#f5f5f5"><b>Todo</b></td><td>${todo.title || todo.task}</td></tr>
+              <tr><td style="background:#f5f5f5"><b>완료자</b></td><td>${userName}</td></tr>
+              <tr><td style="background:#f5f5f5"><b>완료일</b></td><td>${formatDate(todo.completedAt)}</td></tr>
+            </table>
+          </div>
+        `);
+      } catch (e) { console.warn("채널 게시 실패:", e); }
+    }
+    
+    toast("✅ Todo 완료 - 영업에도 동기화됨", "success");
+    renderSETab();
+  } catch (e) {
+    toast("저장 실패: " + e.message, "error");
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Phase 4-A: PE팀 탭
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async function renderPETab() {
+  const tests = await loadTests();
+  
+  const active = tests.filter(t => t.status === "진행중");
+  const thisMonth = new Date().toISOString().substring(0,7);
+  const monthDone = tests.filter(t => t.status === "완료" && (t.completedAt || "").startsWith(thisMonth));
+  const internal = tests.filter(t => t.type === "internal");
+  
+  const peProjects = esProjects.filter(p => {
+    if (!p.status || p.status === "취소") return false;
+    return (p.teams || []).includes("PE") || !p.teams;
+  });
+  
+  $("peKpiProj").innerHTML = `${peProjects.length}<span class="kpi-unit">건</span>`;
+  $("peKpiTest").innerHTML = `${active.length}<span class="kpi-unit">건</span>`;
+  $("peKpiReport").innerHTML = `${monthDone.length}<span class="kpi-unit">건</span>`;
+  $("peKpiRD").innerHTML = `${internal.length}<span class="kpi-unit">건</span>`;
+  
+  if (tests.length === 0) {
+    $("peTestList").innerHTML = `<div style="padding:40px;text-align:center;color:var(--t3);background:var(--bg3);border-radius:8px">
+      <div style="font-size:32px;opacity:0.4;margin-bottom:8px">🧪</div>
+      <div style="font-weight:700">등록된 테스트가 없습니다</div>
+      <div style="font-size:12px;margin-top:4px">[+ 테스트 등록] 버튼으로 첫 테스트를 추가하세요</div>
+    </div>`;
+    return;
+  }
+  
+  $("peTestList").innerHTML = `<div class="tbl-wrap"><table>
+    <thead><tr><th>프로젝트</th><th>종류</th><th>제목</th><th>담당</th><th>시작일</th><th class="center">상태</th><th class="center">보고서</th></tr></thead>
+    <tbody>${tests.map(t => `
+      <tr>
+        <td style="font-family:monospace;font-size:11px">${t.projectCode || "-"}</td>
+        <td>${t.type === "sample" ? "🧪 고객" : t.type === "internal" ? "🔬 내부" : "✅ 검증"}</td>
+        <td class="cell-strong">${t.title || "-"}</td>
+        <td>${t.owner || "-"}</td>
+        <td>${formatDate(t.startDate)}</td>
+        <td class="center">${getStatusBadge(t.status)}</td>
+        <td class="center">${t.reportUrl ? `<a href="${t.reportUrl}" target="_blank" class="badge badge-blue" style="text-decoration:none">📄 열기</a>` : '-'}</td>
+      </tr>
+    `).join("")}</tbody></table></div>`;
+}
+
+async function loadTests() {
+  const t = await fetchJson(ES_TESTS_PATH);
+  return t?.tests || t?.items || [];
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Phase 4-A: AE팀 탭 (CS Todo)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function renderAETab() {
+  // 영업 활동 + Todo 중 CS/AS 관련
+  const csTodos = salesTodos.filter(t => {
+    const dept = (t.assignedDept || t.dept || "").toString();
+    const text = `${t.title || ""} ${t.subject || ""} ${t.task || ""}`.toLowerCase();
+    const isCs = dept.includes("AE") || text.includes("cs") || text.includes("a/s") || text.includes("현장");
+    if (!isCs) return false;
+    return t.status !== "완료" && t.status !== "completed";
+  });
+  
+  const csFromActivities = salesActivities.filter(a => {
+    const text = `${a.subject || ""} ${a.title || ""}`.toLowerCase();
+    const isCs = text.includes("cs") || text.includes("a/s") || text.includes("현장");
+    if (!isCs) return false;
+    return !["완료","납품완료","수주"].includes(a.status);
+  });
+  
+  const allCs = [...csTodos, ...csFromActivities];
+  
+  $("aeKpiCs").innerHTML = `${allCs.length}<span class="kpi-unit">건</span>`;
+  $("aeKpiTrip").innerHTML = `0<span class="kpi-unit">건</span>`;  // 출장 데이터 추후
+  $("aeKpiQuote").innerHTML = `0<span class="kpi-unit">건</span>`;  // AS 견적 추후
+  $("aeKpiDone").innerHTML = `0<span class="kpi-unit">건</span>`;
+  
+  if (allCs.length === 0) {
+    $("aeCsList").innerHTML = `<div style="padding:40px;text-align:center;color:var(--t3);background:var(--bg3);border-radius:8px">
+      <div style="font-size:32px;opacity:0.4;margin-bottom:8px">🛠️</div>
+      <div style="font-weight:700">CS Todo 없음</div>
+      <div style="font-size:12px;margin-top:4px">영업에서 CS/AS Todo를 배정하면 표시됩니다</div>
+    </div>`;
+    return;
+  }
+  
+  $("aeCsList").innerHTML = `<div class="tbl-wrap"><table>
+    <thead><tr><th>고객사</th><th>제목</th><th>접수일</th><th class="center">상태</th><th class="center">조치</th></tr></thead>
+    <tbody>${allCs.map(t => `
+      <tr>
+        <td>${t.company || t.customer || "-"}</td>
+        <td class="cell-strong">${t.title || t.subject || t.task || "-"}</td>
+        <td>${formatDate(t.createdAt || t.regDate)}</td>
+        <td class="center">${getStatusBadge(t.status)}</td>
+        <td class="center">
+          ${t.id ? `<button class="btn xs success" onclick="completeSalesTodo('${t.id}')">✅ 완료</button>` : '-'}
+        </td>
+      </tr>
+    `).join("")}</tbody></table></div>`;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Phase 4-B: 회의록 + 자료 (문서 탭)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function renderDocsTab() {
+  renderMeetings();
+  renderDocs();
+}
+
+function renderMeetings() {
+  // 영업 회의록 + ES 내부 회의록 합치기
+  const allMeetings = [];
+  
+  // 영업 회의록 (read-only로 표시)
+  salesMeetingLogs.forEach(m => {
+    allMeetings.push({
+      ...m,
+      _source: "sales",
+      _sourceLabel: "📊 영업",
+      date: m.date || m.meetingDate || m.createdAt
+    });
+  });
+  
+  // ES 내부 회의록
+  esMeetings.forEach(m => {
+    allMeetings.push({
+      ...m,
+      _source: "es",
+      _sourceLabel: "🔧 ES",
+      date: m.date || m.createdAt
+    });
+  });
+  
+  // 정렬 (최신순)
+  allMeetings.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  
+  // 필터
+  const search = ($("meetingSearch")?.value || "").toLowerCase();
+  const typeFilter = $("meetingTypeFilter")?.value || "";
+  
+  let filtered = allMeetings.filter(m => {
+    if (typeFilter && m._source !== typeFilter) return false;
+    if (search) {
+      const text = `${m.title || ""} ${m.content || ""} ${m.projectCode || ""} ${m.company || m.customer || ""}`.toLowerCase();
+      if (!text.includes(search)) return false;
+    }
+    return true;
+  });
+  
+  if (filtered.length === 0) {
+    $("meetingList").innerHTML = `<div style="padding:40px;text-align:center;color:var(--t3);background:var(--bg3);border-radius:8px">
+      <div style="font-size:32px;opacity:0.4;margin-bottom:8px">📝</div>
+      <div style="font-weight:700">${allMeetings.length === 0 ? "회의록이 없습니다" : "검색 결과가 없습니다"}</div>
+    </div>`;
+    return;
+  }
+  
+  $("meetingList").innerHTML = filtered.slice(0, 50).map(m => `
+    <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;cursor:${m._source === "es" ? "pointer" : "default"}" ${m._source === "es" ? `onclick="editMeeting('${m.id}')"` : ""}>
+      <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:6px">
+        <div>
+          <div style="font-weight:700">${m.title || "(제목 없음)"}</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:2px">
+            ${m._sourceLabel} · ${formatDate(m.date)} · 
+            ${m.projectCode || m.pjcode ? `<span style="font-family:monospace">${m.projectCode || m.pjcode}</span> · ` : ""}
+            ${m.company || m.customer || ""}
+          </div>
+        </div>
+        <span class="badge ${m._source === "es" ? "badge-purple" : "badge-blue"}">${m._sourceLabel}</span>
+      </div>
+      ${m.content ? `<div style="font-size:12px;color:var(--t2);white-space:pre-wrap;max-height:60px;overflow:hidden">${(m.content || "").substring(0,200)}${(m.content || "").length > 200 ? "..." : ""}</div>` : ""}
+    </div>
+  `).join("");
+}
+
+function renderDocs() {
+  // ES에서 업로드한 자료들 (es-docs-sync.json)
+  // 향후 fetchJson으로 가져와서 영업 customerFiles와 통합 표시
+  $("docList").innerHTML = `<div style="padding:40px;text-align:center;color:var(--t3);background:var(--bg3);border-radius:8px">
+    <div style="font-size:32px;opacity:0.4;margin-bottom:8px">📁</div>
+    <div style="font-weight:700">자료 업로드 기능</div>
+    <div style="font-size:12px;margin-top:4px">[📤 자료 업로드] 버튼으로 기술자료 / 샘플테스트보고서를 업로드하세요<br>업로드 시 영업 모듈에 자동 동기화됩니다</div>
+  </div>`;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 회의록 / 도면 / 테스트 / 자료 모달 핸들러
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+let editingMeetingId = null;
+
+function openMeetingModal() {
+  editingMeetingId = null;
+  $("meetingModalTitle").textContent = "📝 ES 내부 회의록 작성";
+  $("mDeleteBtn").style.display = "none";
+  
+  populateProjectSelectFor("mF_projectCode");
+  $("mF_date").value = new Date().toISOString().substring(0,10);
+  $("mF_time").value = new Date().toTimeString().substring(0,5);
+  $("mF_place").value = "";
+  $("mF_title").value = "";
+  $("mF_attendees").value = userName || "";
+  $("mF_content").value = "";
+  $("mF_actions").value = "";
+  $("mF_postChannel").checked = true;
+  $("mF_shareSales").checked = true;
+  
+  $("modalMeeting").classList.add("on");
+}
+
+function editMeeting(id) {
+  const m = esMeetings.find(x => x.id === id);
+  if (!m) return;
+  editingMeetingId = id;
+  $("meetingModalTitle").textContent = "📝 ES 내부 회의록 편집";
+  $("mDeleteBtn").style.display = "inline-block";
+  
+  populateProjectSelectFor("mF_projectCode");
+  $("mF_projectCode").value = m.projectCode || "";
+  $("mF_date").value = m.date || "";
+  $("mF_time").value = m.time || "";
+  $("mF_place").value = m.place || "";
+  $("mF_title").value = m.title || "";
+  $("mF_attendees").value = m.attendees || "";
+  $("mF_content").value = m.content || "";
+  $("mF_actions").value = m.actions || "";
+  
+  $("modalMeeting").classList.add("on");
+}
+
+function populateProjectSelectFor(elemId) {
+  const sel = $(elemId);
+  if (!sel) return;
+  const allCodes = new Set();
+  const opts = [];
+  
+  esProjects.forEach(p => {
+    const code = p.salesCode || p.id;
+    if (code && !allCodes.has(code)) {
+      allCodes.add(code);
+      opts.push({ code, title: p.title, customer: p.customer });
+    }
+  });
+  
+  salesActivities.forEach(a => {
+    const code = a.projectCode || a.pjcode || a.code;
+    if (code && !allCodes.has(code)) {
+      allCodes.add(code);
+      opts.push({ code, title: a.projectName || a.subject || code, customer: a.company });
+    }
+  });
+  
+  sel.innerHTML = '<option value="">선택...</option>' + 
+    opts.map(o => `<option value="${o.code}">${o.code} - ${o.title}</option>`).join("");
+}
+
+async function saveMeeting() {
+  const projectCode = $("mF_projectCode").value;
+  const title = $("mF_title").value.trim();
+  if (!title) { toast("회의 제목을 입력하세요", "error"); return; }
+  
+  const data = {
+    id: editingMeetingId || `MTG-${Date.now()}`,
+    projectCode,
+    date: $("mF_date").value,
+    time: $("mF_time").value,
+    place: $("mF_place").value,
+    title,
+    attendees: $("mF_attendees").value,
+    content: $("mF_content").value,
+    actions: $("mF_actions").value,
+    type: "es_internal",
+    createdBy: userEmail,
+    createdAt: new Date().toISOString()
+  };
+  
+  if (editingMeetingId) {
+    const idx = esMeetings.findIndex(m => m.id === editingMeetingId);
+    if (idx >= 0) esMeetings[idx] = { ...esMeetings[idx], ...data };
+  } else {
+    esMeetings.unshift(data);
+  }
+  
+  try {
+    await saveJson(ES_MEETINGS_PATH, { meetings: esMeetings, lastUpdate: new Date().toISOString() });
+    
+    // 영업에도 공유
+    if ($("mF_shareSales").checked) {
+      const salesMeeting = {
+        id: data.id,
+        meetingDate: data.date,
+        title: `[ES 내부] ${data.title}`,
+        content: data.content,
+        actions: data.actions,
+        projectCode: data.projectCode,
+        company: salesActivities.find(a => (a.projectCode || a.pjcode) === projectCode)?.company || "",
+        source: "es_internal",
+        createdAt: data.createdAt,
+        createdBy: userEmail
+      };
+      // 영업 mtg-logs.json에 추가
+      const existingIdx = salesMeetingLogs.findIndex(m => m.id === data.id);
+      if (existingIdx >= 0) salesMeetingLogs[existingIdx] = salesMeeting;
+      else salesMeetingLogs.unshift(salesMeeting);
+      
+      try {
+        await saveJson(SALES_MEETINGS_LOG_PATH, { logs: salesMeetingLogs, lastUpdate: new Date().toISOString() });
+      } catch (e) { console.warn("영업 회의록 동기화 실패:", e); }
+    }
+    
+    // Teams 채널에 게시
+    if ($("mF_postChannel").checked && projectCode) {
+      const channel = channelMap[projectCode];
+      if (channel && channel.status === "active") {
+        try {
+          await postChannelMessage(channel.channelId, `
+            <div>
+              <p><b>📝 ES 내부 회의록</b></p>
+              <table border="1" cellpadding="6" style="border-collapse:collapse;font-family:'Segoe UI',sans-serif;font-size:12px">
+                <tr><td style="background:#f5f5f5"><b>제목</b></td><td>${data.title}</td></tr>
+                <tr><td style="background:#f5f5f5"><b>일시</b></td><td>${data.date} ${data.time}</td></tr>
+                <tr><td style="background:#f5f5f5"><b>참석자</b></td><td>${data.attendees}</td></tr>
+                ${data.actions ? `<tr><td style="background:#fef3c7"><b>Action Items</b></td><td style="white-space:pre-wrap">${data.actions}</td></tr>` : ""}
+              </table>
+            </div>
+          `);
+        } catch (e) { console.warn("채널 게시 실패:", e); }
+      }
+    }
+    
+    toast("✅ 회의록 저장 완료", "success");
+    closeModal("modalMeeting");
+    renderMeetings();
+  } catch (e) {
+    toast("저장 실패: " + e.message, "error");
+  }
+}
+
+async function deleteMeeting() {
+  if (!editingMeetingId || !confirm("이 회의록을 삭제하시겠습니까?")) return;
+  esMeetings = esMeetings.filter(m => m.id !== editingMeetingId);
+  try {
+    await saveJson(ES_MEETINGS_PATH, { meetings: esMeetings, lastUpdate: new Date().toISOString() });
+    toast("삭제 완료", "success");
+    closeModal("modalMeeting");
+    renderMeetings();
+  } catch (e) { toast("삭제 실패: " + e.message, "error"); }
+}
+
+// ━━ 도면 등록 ━━
+function openDrawingModal() {
+  populateProjectSelectFor("dF_projectCode");
+  $("dF_type").value = "기구";
+  $("dF_name").value = "";
+  $("dF_version").value = "v1.0";
+  $("dF_url").value = "";
+  $("dF_imageUrl").value = "";
+  $("dF_note").value = "";
+  $("modalDrawing").classList.add("on");
+}
+
+async function saveDrawing() {
+  const projectCode = $("dF_projectCode").value;
+  const name = $("dF_name").value.trim();
+  const url = $("dF_url").value.trim();
+  if (!projectCode || !name || !url) { 
+    toast("프로젝트, 도면명, URL을 입력하세요", "error"); 
+    return; 
+  }
+  
+  const dr = await fetchJson(ES_DRAWINGS_PATH);
+  const drawings = dr?.drawings || [];
+  
+  drawings.unshift({
+    id: `DR-${Date.now()}`,
+    projectCode,
+    type: $("dF_type").value,
+    name,
+    version: $("dF_version").value,
+    url,
+    imageUrl: $("dF_imageUrl").value,
+    note: $("dF_note").value,
+    createdAt: new Date().toISOString(),
+    createdBy: userEmail
+  });
+  
+  try {
+    await saveJson(ES_DRAWINGS_PATH, { drawings, lastUpdate: new Date().toISOString() });
+    
+    // 채널에 게시
+    const channel = channelMap[projectCode];
+    if (channel && channel.status === "active") {
+      try {
+        await postChannelMessage(channel.channelId, `
+          <div>
+            <p><b>📐 도면 등록</b></p>
+            <table border="1" cellpadding="6" style="border-collapse:collapse;font-family:'Segoe UI',sans-serif;font-size:12px">
+              <tr><td style="background:#f5f5f5"><b>도면명</b></td><td>${name} (${$("dF_version").value})</td></tr>
+              <tr><td style="background:#f5f5f5"><b>종류</b></td><td>${$("dF_type").value}</td></tr>
+              <tr><td style="background:#f5f5f5"><b>Cloudium</b></td><td><a href="${url}">${url}</a></td></tr>
+            </table>
+          </div>
+        `);
+      } catch (e) {}
+    }
+    
+    toast("✅ 도면 등록 완료", "success");
+    closeModal("modalDrawing");
+    renderSETab();
+  } catch (e) {
+    toast("저장 실패: " + e.message, "error");
+  }
+}
+
+// ━━ 테스트 등록 (PE팀) ━━
+function openTestModal() {
+  populateProjectSelectFor("tF_projectCode");
+  $("tF_type").value = "sample";
+  $("tF_title").value = "";
+  $("tF_owner").value = userName || "";
+  $("tF_startDate").value = new Date().toISOString().substring(0,10);
+  $("tF_endDate").value = "";
+  $("tF_status").value = "대기";
+  $("tF_result").value = "";
+  $("tF_reportUrl").value = "";
+  $("modalTest").classList.add("on");
+}
+
+async function saveTest() {
+  const projectCode = $("tF_projectCode").value;
+  const title = $("tF_title").value.trim();
+  if (!title) { toast("제목을 입력하세요", "error"); return; }
+  
+  const t = await fetchJson(ES_TESTS_PATH);
+  const tests = t?.tests || [];
+  
+  tests.unshift({
+    id: `TEST-${Date.now()}`,
+    projectCode,
+    type: $("tF_type").value,
+    title,
+    owner: $("tF_owner").value,
+    startDate: $("tF_startDate").value,
+    endDate: $("tF_endDate").value,
+    status: $("tF_status").value,
+    result: $("tF_result").value,
+    reportUrl: $("tF_reportUrl").value,
+    createdAt: new Date().toISOString(),
+    createdBy: userEmail
+  });
+  
+  try {
+    await saveJson(ES_TESTS_PATH, { tests, lastUpdate: new Date().toISOString() });
+    
+    // 완료 시 채널에 게시
+    if ($("tF_status").value === "완료" && projectCode) {
+      const channel = channelMap[projectCode];
+      if (channel && channel.status === "active") {
+        try {
+          await postChannelMessage(channel.channelId, `
+            <div>
+              <p><b>🧪 테스트 완료</b></p>
+              <table border="1" cellpadding="6" style="border-collapse:collapse;font-family:'Segoe UI',sans-serif;font-size:12px">
+                <tr><td style="background:#f5f5f5"><b>제목</b></td><td>${title}</td></tr>
+                <tr><td style="background:#f5f5f5"><b>종류</b></td><td>${$("tF_type").value}</td></tr>
+                <tr><td style="background:#f5f5f5"><b>담당</b></td><td>${$("tF_owner").value}</td></tr>
+                ${$("tF_reportUrl").value ? `<tr><td style="background:#f5f5f5"><b>보고서</b></td><td><a href="${$("tF_reportUrl").value}">열기</a></td></tr>` : ""}
+              </table>
+            </div>
+          `);
+        } catch (e) {}
+      }
+    }
+    
+    toast("✅ 테스트 등록 완료", "success");
+    closeModal("modalTest");
+    renderPETab();
+  } catch (e) { toast("저장 실패: " + e.message, "error"); }
+}
+
+// ━━ 자료 업로드 ━━
+function openDocUploadModal() {
+  populateProjectSelectFor("docF_projectCode");
+  $("docF_category").value = "기술자료";
+  $("docF_name").value = "";
+  $("docF_note").value = "";
+  $("docF_shareSales").checked = true;
+  $("docF_postChannel").checked = true;
+  $("modalDocUpload").classList.add("on");
+}
+
+async function uploadDoc() {
+  const projectCode = $("docF_projectCode").value;
+  const fileInput = $("docF_file");
+  const file = fileInput.files[0];
+  const name = $("docF_name").value || file?.name;
+  
+  if (!projectCode) { toast("프로젝트를 선택하세요", "error"); return; }
+  if (!file && !name) { toast("파일을 선택하거나 이름을 입력하세요", "error"); return; }
+  
+  toast("📤 업로드 중...");
+  
+  try {
+    // SharePoint에 업로드
+    const token = await getToken();
+    const category = $("docF_category").value;
+    const folderPath = `🔧 ES사업부/01.프로젝트/${projectCode}/${category}`;
+    const fullPath = `${folderPath}/${name || file.name}`;
+    
+    if (file) {
+      const buf = await file.arrayBuffer();
+      const r = await fetch(`https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${encodeURIComponent(fullPath)}:/content`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` },
+        body: buf
+      });
+      if (!r.ok) throw new Error(`업로드 실패 (${r.status})`);
+    }
+    
+    // 영업에도 공유 (es-docs-sync.json 기록)
+    if ($("docF_shareSales").checked) {
+      const sa = salesActivities.find(a => (a.projectCode || a.pjcode) === projectCode);
+      if (sa) {
+        // 영업 활동의 customerFiles에 추가 (영업 모듈 구조)
+        if (!sa.customerFiles) sa.customerFiles = [];
+        sa.customerFiles.push({
+          id: `ES-${Date.now()}`,
+          name: name || file.name,
+          category,
+          source: "es_module",
+          uploadedBy: userEmail,
+          uploadedAt: new Date().toISOString(),
+          path: fullPath
+        });
+        try {
+          await saveJson(SALES_ACTIVITIES_PATH, salesActivities);
+        } catch (e) { console.warn("영업 동기화 실패:", e); }
+      }
+    }
+    
+    // 채널 게시
+    if ($("docF_postChannel").checked) {
+      const channel = channelMap[projectCode];
+      if (channel && channel.status === "active") {
+        try {
+          await postChannelMessage(channel.channelId, `
+            <div>
+              <p><b>📁 ES 자료 업로드</b></p>
+              <table border="1" cellpadding="6" style="border-collapse:collapse;font-family:'Segoe UI',sans-serif;font-size:12px">
+                <tr><td style="background:#f5f5f5"><b>파일명</b></td><td>${name || file.name}</td></tr>
+                <tr><td style="background:#f5f5f5"><b>분류</b></td><td>${category}</td></tr>
+                <tr><td style="background:#f5f5f5"><b>업로드</b></td><td>${userName}</td></tr>
+              </table>
+            </div>
+          `);
+        } catch (e) {}
+      }
+    }
+    
+    toast("✅ 자료 업로드 완료", "success");
+    closeModal("modalDocUpload");
+  } catch (e) {
+    toast("업로드 실패: " + e.message, "error");
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Phase 4-C: 전자결재 상신 (구매품의서)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async function submitApproval() {
+  if (!editingQuoteId) { toast("견적을 먼저 저장하세요", "error"); return; }
+  
+  const quote = esQuotes.find(q => q.id === editingQuoteId);
+  if (!quote) { toast("견적 조회 실패", "error"); return; }
+  
+  // 단가 미입력 체크
+  const pending = currentBomItems.filter(b => !b.unitPrice || parseFloat(b.unitPrice) === 0);
+  if (pending.length > 0) {
+    if (!confirm(`단가 미입력 부품이 ${pending.length}개 있습니다.\n그래도 전자결재 상신하시겠습니까?`)) return;
+  }
+  
+  if (!confirm(`전자결재(구매품의서)를 상신하시겠습니까?\n\n견적: ${quote.id}\n프로젝트: ${quote.projectCode}\nBOM 합계: ₩${formatMoney(quote.summary?.bomTotal || 0)}\nES 산출 원가: ₩${formatMoney(quote.summary?.total || 0)}\n\n결재 완료 시 구매 모듈에 자동 등록됩니다.`)) return;
+  
+  // 결재선 (예시) - 실제로는 전자결재 v1.5의 결재선 설정 활용
+  const approvalLine = [
+    { email: userEmail, name: userName, role: "기안자", step: 0, action: "기안" },
+    { email: "purchase-mgr@enjet.co.kr", name: "구매팀장", role: "검토", step: 1 },
+    { email: "ceo@enjet.co.kr", name: "대표이사", role: "결재", step: 2 }
+  ];
+  
+  // 전자결재 데이터 생성 (전자결재 v1.5 형식)
+  const approval = {
+    id: `APR-${Date.now()}`,
+    formId: "PURCHASE",
+    title: `[ES] ${quote.projectCode} 구매품의 - ${quote.customer}`,
+    drafter: {
+      email: userEmail,
+      name: userName,
+      dept: "ES사업부",
+      rank: "" // HR에서 가져올 수 있음
+    },
+    formData: {
+      // 구매품의 양식 필드
+      purchaseType: "프로젝트 자재",
+      projectCode: quote.projectCode,
+      customer: quote.customer,
+      projectName: quote.title,
+      items: currentBomItems.map(b => ({
+        partNo: b.partNo,
+        name: b.name,
+        spec: b.spec,
+        qty: b.qty,
+        unit: b.unit,
+        unitPrice: b.unitPrice,
+        totalAmount: (parseFloat(b.qty) || 0) * (parseFloat(b.unitPrice) || 0),
+        supplier: b.supplier || ""
+      })),
+      totalQty: currentBomItems.reduce((s, b) => s + (parseFloat(b.qty) || 0), 0),
+      totalAmount: quote.summary?.bomTotal || 0,
+      specialNote: $("qF_note").value,
+      esQuoteId: quote.id  // ES 견적 ID 연결
+    },
+    approvalLine,
+    currentStep: 0,
+    status: "진행중",
+    createdAt: new Date().toISOString(),
+    source: "es_module"  // ES 모듈에서 자동 생성된 표시
+  };
+  
+  // approval-master.json에 추가
+  if (!approvalMaster.approvals) approvalMaster.approvals = [];
+  approvalMaster.approvals.unshift(approval);
+  
+  try {
+    await saveJson(APPROVAL_MASTER_PATH, approvalMaster);
+    
+    // 견적 상태 변경: approval_pending
+    quote.status = "approval_pending";
+    quote.approvalId = approval.id;
+    quote.approvalSubmittedAt = new Date().toISOString();
+    await saveJson(ES_QUOTES_PATH, { quotes: esQuotes, lastUpdate: new Date().toISOString() });
+    
+    // 채널 게시
+    const channel = channelMap[quote.projectCode];
+    if (channel && channel.status === "active") {
+      try {
+        await postChannelMessage(channel.channelId, `
+          <div>
+            <p><b>⚖️ 전자결재 상신 - 구매품의서</b></p>
+            <table border="1" cellpadding="6" style="border-collapse:collapse;font-family:'Segoe UI',sans-serif;font-size:12px">
+              <tr><td style="background:#f5f5f5"><b>결재 번호</b></td><td>${approval.id}</td></tr>
+              <tr><td style="background:#f5f5f5"><b>제목</b></td><td>${approval.title}</td></tr>
+              <tr><td style="background:#f5f5f5"><b>품목 수</b></td><td>${currentBomItems.length}건</td></tr>
+              <tr><td style="background:#f5f5f5"><b>금액</b></td><td>₩${formatMoney(quote.summary?.bomTotal || 0)}</td></tr>
+              <tr><td style="background:#f5f5f5"><b>결재선</b></td><td>${approvalLine.map(a => a.name).join(" → ")}</td></tr>
+            </table>
+            <p style="margin-top:8px;color:#666"><i>결재 완료 시 구매 모듈에 자동 등록됩니다.</i></p>
+          </div>
+        `);
+      } catch (e) {}
+    }
+    
+    toast(`✅ 전자결재 상신 완료\n${approval.id}\n결재선: ${approvalLine.map(a => a.name).join(" → ")}`, "success");
+    closeModal("modalQuote");
+    renderQuotes();
+  } catch (e) {
+    toast("상신 실패: " + e.message, "error");
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 견적 상태에 "결재중" 추가
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function getQuoteStatusBadgeWithApproval(status) {
+  if (status === "approval_pending") return '<span class="badge badge-purple">⚖️ 결재중</span>';
+  if (status === "approval_completed") return '<span class="badge badge-green">✅ 결재완료</span>';
+  return getQuoteStatusBadge(status);
 }
 
 // 시작
