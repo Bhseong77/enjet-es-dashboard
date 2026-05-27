@@ -4660,7 +4660,9 @@ const HR_EMPLOYEE_PATH = "🧑‍💼 인사·급여/99.Dashboard(real-time)/emp
 async function loadHRData() {
   try {
     const data = await fetchJson(HR_EMPLOYEE_PATH);
-    return data?.employees || data?.items || data || [];
+    const employees = data?.employees || data?.items || data || [];
+    window._hrDataCache = employees;  // prq 결재자 추가 검색용 캐시
+    return employees;
   } catch (e) {
     console.warn("HR 데이터 로드 실패:", e);
     return [];
@@ -4944,6 +4946,8 @@ function prqEditDraft(id) {
     document.getElementById("prqApprovalBtn").style.display = "inline-block";
     document.getElementById("prqItemCount").textContent = `총 ${prqItems.length}건`;
     prqRenderTable();
+    // 결재라인 자동 구성
+    prqReloadApprovalLine();
   }, 50);
 }
 
@@ -4993,13 +4997,13 @@ function prqSaveDraft() {
     // 기존 수정
     const idx = prqDraftList.findIndex(d => d.id === prqEditId);
     if (idx >= 0) {
-      prqDraftList[idx] = { ...prqDraftList[idx], projCode, dept, dueDate, note, items: [...prqItems], savedAt: now };
+      prqDraftList[idx] = { ...prqDraftList[idx], projCode, dept, dueDate, note, items: [...prqItems], approvalLine: [...prqApprovalLine], savedAt: now };
     }
   } else {
     // 신규 저장
     const newId = `PRQ-${Date.now()}`;
     prqEditId = newId;
-    prqDraftList.unshift({ id: newId, projCode, dept, dueDate, note, items: [...prqItems], status: "임시저장", savedAt: now, createdAt: now });
+    prqDraftList.unshift({ id: newId, projCode, dept, dueDate, note, items: [...prqItems], approvalLine: [...prqApprovalLine], status: "임시저장", savedAt: now, createdAt: now });
   }
 
   prqSaveList();
@@ -5025,10 +5029,12 @@ async function prqEditAndSubmit(id) {
 
 function prqReset() {
   prqItems = [];
+  prqApprovalLine = [];
   document.getElementById("prqHeader").style.display = "none";
   document.getElementById("prqTableWrap").style.display = "none";
   document.getElementById("prqLoading").style.display = "none";
   document.getElementById("prqApprovalBtn").style.display = "none";
+  document.getElementById("prqSaveBtn") && (document.getElementById("prqSaveBtn").style.display = "none");
   document.getElementById("prqFileInput").value = "";
   document.getElementById("prqTbody").innerHTML = "";
 }
@@ -5213,6 +5219,126 @@ function prqAddRow() {
   prqRenderTable();
 }
 
+// ── 결재라인 데이터 ──
+let prqApprovalLine = [];  // [{email, name, rank, dept, step}]
+
+// ── 결재라인 자동 구성 (BOM 파싱 완료 or 탭 진입 시 호출) ──
+async function prqReloadApprovalLine() {
+  try {
+    const line = await buildApprovalLine(userEmail);
+    // 기안자 제외, 결재자만
+    prqApprovalLine = line
+      .filter(a => a.role !== "기안자")
+      .map((a, i) => ({
+        step: i + 1,
+        email: a.email,
+        name: a.name,
+        rank: a.rank || "",
+        dept: a.dept || "ES사업부",
+        status: "대기",
+        actionDate: null,
+        comment: ""
+      }));
+    prqRenderApprovalLine();
+  } catch(e) {
+    console.error("결재라인 구성 실패:", e);
+    prqApprovalLine = [];
+    prqRenderApprovalLine();
+  }
+}
+
+// ── 결재라인 렌더링 ──
+function prqRenderApprovalLine() {
+  const body = document.getElementById("prqApprovalLineBody");
+  if (!body) return;
+
+  if (!prqApprovalLine.length) {
+    body.innerHTML = '<div style="text-align:center;padding:12px;color:var(--t3);font-size:13px">결재자가 없습니다. [+ 결재자 추가] 버튼을 눌러주세요.</div>';
+    return;
+  }
+
+  body.innerHTML = prqApprovalLine.map((ap, i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg2);border-radius:8px;border:1px solid var(--border)">
+      <div style="font-size:12px;color:var(--t3);min-width:24px;text-align:center;font-weight:700">${i+1}</div>
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:14px">${escHtml(ap.name)} <span style="font-size:12px;color:var(--t3);font-weight:400">${escHtml(ap.rank)}</span></div>
+        <div style="font-size:12px;color:var(--t3)">${escHtml(ap.dept)} · ${escHtml(ap.email)}</div>
+      </div>
+      <div style="display:flex;gap:4px">
+        ${i > 0 ? `<button onclick="prqMoveApprover(${i},-1)" style="background:none;border:1px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer;font-size:13px" title="위로">↑</button>` : '<div style="width:29px"></div>'}
+        ${i < prqApprovalLine.length-1 ? `<button onclick="prqMoveApprover(${i},1)" style="background:none;border:1px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer;font-size:13px" title="아래로">↓</button>` : '<div style="width:29px"></div>'}
+        <button onclick="prqRemoveApprover(${i})" style="background:none;border:1px solid #fca5a5;border-radius:6px;padding:3px 7px;cursor:pointer;color:#ef4444;font-size:13px" title="삭제">✕</button>
+      </div>
+    </div>
+  `).join('<div style="display:flex;justify-content:center;color:var(--t3);font-size:16px;margin:-2px 0">→</div>');
+}
+
+// ── 결재자 순서 이동 ──
+function prqMoveApprover(idx, dir) {
+  const target = idx + dir;
+  if (target < 0 || target >= prqApprovalLine.length) return;
+  [prqApprovalLine[idx], prqApprovalLine[target]] = [prqApprovalLine[target], prqApprovalLine[idx]];
+  prqApprovalLine.forEach((a, i) => a.step = i + 1);
+  prqRenderApprovalLine();
+}
+
+// ── 결재자 삭제 ──
+function prqRemoveApprover(idx) {
+  prqApprovalLine.splice(idx, 1);
+  prqApprovalLine.forEach((a, i) => a.step = i + 1);
+  prqRenderApprovalLine();
+}
+
+// ── 결재자 추가 모달 ──
+function prqAddApprover() {
+  document.getElementById("prqHrModal").style.display = "flex";
+  document.getElementById("prqHrSearch").value = "";
+  prqRenderHrList();
+}
+
+// ── HR 목록 렌더링 ──
+function prqRenderHrList() {
+  const q = (document.getElementById("prqHrSearch")?.value || "").toLowerCase();
+  const list = document.getElementById("prqHrList");
+  if (!list) return;
+
+  const employees = window._hrDataCache || [];
+  const filtered = employees.filter(e =>
+    e["재직상태"] === "재직" &&
+    ((e["성명"]||"").includes(q) || (e["부서"]||"").includes(q) || (e["직급"]||"").includes(q))
+  ).slice(0, 30);
+
+  if (!filtered.length) {
+    list.innerHTML = '<div style="padding:12px;text-align:center;color:var(--t3)">검색 결과 없음</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(e => {
+    const email = e["ID(email)"] || "";
+    const alreadyAdded = prqApprovalLine.some(a => a.email === email);
+    return `<div style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px${alreadyAdded ? ";opacity:0.4;pointer-events:none" : ""}"
+               onclick="prqSelectApprover('${email}','${escHtml(e["성명"]||"")}','${escHtml(e["직급"]||"")}','${escHtml(e["부서"]||"")}')">
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:14px">${escHtml(e["성명"]||"")} <span style="font-size:12px;color:var(--t3);font-weight:400">${escHtml(e["직급"]||"")}</span></div>
+        <div style="font-size:12px;color:var(--t3)">${escHtml(e["부서"]||"")} · ${escHtml(email)}</div>
+      </div>
+      ${alreadyAdded ? '<span style="font-size:11px;color:var(--t3)">추가됨</span>' : '<span style="font-size:12px;color:var(--p)">+ 추가</span>'}
+    </div>`;
+  }).join("");
+}
+
+// ── 결재자 선택 ──
+function prqSelectApprover(email, name, rank, dept) {
+  if (prqApprovalLine.some(a => a.email === email)) return;
+  prqApprovalLine.push({
+    step: prqApprovalLine.length + 1,
+    email, name, rank, dept,
+    status: "대기", actionDate: null, comment: ""
+  });
+  prqRenderApprovalLine();
+  prqRenderHrList();  // 추가됨 표시 갱신
+}
+
 async function prqSubmitApproval() {
   const projCode = document.getElementById("prqProjCode").value.trim();
   const dept     = document.getElementById("prqDept").value.trim();
@@ -5226,15 +5352,20 @@ async function prqSubmitApproval() {
   if (!confirm(`구매품의 결재상신\n\n프로젝트: ${projCode}\n품목수: ${validItems.length}건\n요청부서: ${dept}\n\n결재를 상신하시겠습니까?`)) return;
 
   try {
-    // 결재라인 생성
-    const approvalLine = await buildApprovalLine(userEmail);
-    const approvalLineFormatted = approvalLine
-      .filter(a => a.role !== "기안자")
-      .map((a, i) => ({
-        step: i+1, email: a.email, name: a.name,
-        rank: a.rank||"", dept: a.dept||dept,
-        status: "대기", actionDate: null, comment: ""
-      }));
+    // 결재라인: 편집된 prqApprovalLine 사용 (없으면 자동 생성)
+    let approvalLineFormatted = prqApprovalLine.length > 0
+      ? prqApprovalLine
+      : (await buildApprovalLine(userEmail))
+          .filter(a => a.role !== "기안자")
+          .map((a, i) => ({
+            step: i+1, email: a.email, name: a.name,
+            rank: a.rank||"", dept: a.dept||dept,
+            status: "대기", actionDate: null, comment: ""
+          }));
+    if (!approvalLineFormatted.length) {
+      alert("결재자를 한 명 이상 추가해주세요.");
+      return;
+    }
 
     const now = new Date().toISOString();
     const apId = `AP-${now.slice(0,10).replace(/-/g,"")}-ES${Date.now().toString().slice(-3)}`;
@@ -5412,6 +5543,31 @@ async function prqSubmitApproval() {
             <tbody id="prqTbody"></tbody>
           </table>
         </div>
+        <!-- 결재라인 편집 -->
+        <div id="prqApprovalLineWrap" style="margin-top:20px;border:1px solid var(--border);border-radius:12px;overflow:hidden">
+          <div style="background:var(--bg3);padding:10px 16px;display:flex;align-items:center;gap:8px">
+            <div style="font-weight:700;font-size:14px">⚖️ 결재라인</div>
+            <div style="font-size:12px;color:var(--t3)">HR DB 기반 자동 구성 · 편집 가능</div>
+            <button class="btn outline sm" style="margin-left:auto" onclick="prqReloadApprovalLine()">🔄 자동 구성</button>
+            <button class="btn outline sm" onclick="prqAddApprover()">+ 결재자 추가</button>
+          </div>
+          <div id="prqApprovalLineBody" style="padding:12px;display:flex;flex-direction:column;gap:6px">
+            <div style="text-align:center;padding:16px;color:var(--t3);font-size:13px">결재라인을 불러오는 중...</div>
+          </div>
+        </div>
+
+        <!-- HR 검색 모달 (결재자 추가용) -->
+        <div id="prqHrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center">
+          <div style="background:var(--bg);border-radius:14px;padding:20px;width:360px;max-width:90vw">
+            <div style="font-weight:700;font-size:16px;margin-bottom:12px">👤 결재자 추가</div>
+            <input type="text" id="prqHrSearch" class="si" placeholder="이름 검색..." style="width:100%;margin-bottom:10px" oninput="prqRenderHrList()">
+            <div id="prqHrList" style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:8px"></div>
+            <div style="margin-top:12px;text-align:right">
+              <button class="btn outline" onclick="document.getElementById('prqHrModal').style.display='none'">닫기</button>
+            </div>
+          </div>
+        </div>
+
         <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:10px">
           <button class="btn" style="font-size:14px;padding:10px 20px;background:#059669;color:#fff" onclick="prqSaveDraft()">💾 임시저장</button>
           <button class="btn purple" style="font-size:15px;padding:12px 28px" onclick="prqSubmitApproval()">⚖️ 결재상신</button>
