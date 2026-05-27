@@ -194,7 +194,7 @@ tr.clickable:hover { background:var(--bg3); }
   .hdr-title { font-size:20px; }
   .kpi-val { font-size:20px; }
   .main { padding:12px; }
-  .tab { padding:12px 12px; font-size:12px; }
+  .tab { display:none; }
   .kpi-grid { grid-template-columns:repeat(2, 1fr) !important; gap:8px !important; }
   .kpi { padding:12px 10px !important; }
   .section { padding:14px !important; }
@@ -222,6 +222,32 @@ tr.clickable:hover { background:var(--bg3); }
   body { user-select:none; -webkit-user-select:none; }
   .header { padding-top:max(14px, env(safe-area-inset-top)); }
 }
+
+/* ── 사이드바 레이아웃 ── */
+.tabs-wrap,.tabs,.tab { display:none !important; }
+#app { display:flex !important; flex-direction:row; min-height:100vh; }
+.sb { width:200px; background:var(--bg2); border-right:1px solid var(--border); display:flex; flex-direction:column; position:sticky; top:0; height:100vh; flex-shrink:0; overflow-y:auto; }
+.sb-logo { padding:14px 16px 10px; border-bottom:1px solid var(--border); background:linear-gradient(135deg,#0f4c81,#1a6fd4); }
+.sb-mark { font-size:18px; font-weight:900; color:#fff; letter-spacing:2px; }
+.sb-sub-txt { font-size:11px; color:rgba(255,255,255,0.8); letter-spacing:1px; margin-top:2px; }
+.sb-user { padding:8px 12px; border-bottom:1px solid var(--border); font-size:11px; color:var(--t3); }
+.sb-nav { padding:6px; flex:1; overflow-y:auto; }
+.sb-sec { font-size:10px; text-transform:uppercase; letter-spacing:1.5px; color:var(--t3); padding:10px 8px 3px; font-weight:800; }
+.ni { display:flex; align-items:center; gap:6px; padding:9px 10px; border-radius:8px; font-size:13px; color:var(--t2); cursor:pointer; font-weight:500; margin-bottom:1px; transition:all .15s; }
+.ni:hover { background:var(--bg3); }
+.ni.on { background:#e0eeff; color:#1a6fd4; font-weight:700; }
+.nb { margin-left:auto; font-size:11px; padding:1px 5px; border-radius:5px; font-family:var(--m); font-weight:700; background:#dcfce7; color:#16a34a; }
+.sb-foot { padding:10px 14px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:4px; }
+.sb-foot-btn { font-size:12px; padding:6px 10px; border:1px solid var(--border); border-radius:7px; background:none; cursor:pointer; color:var(--t2); text-align:left; width:100%; }
+.sb-foot-btn:hover { background:var(--bg3); }
+.app-main { flex:1; min-width:0; display:flex; flex-direction:column; overflow-y:auto; }
+.topbar { background:var(--bg2); border-bottom:1px solid var(--border); padding:10px 20px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:100; }
+.topbar-title { font-size:16px; font-weight:800; color:var(--t); }
+.tab-panel { padding:0; }
+@media(max-width:768px) {
+  .sb { width:160px; }
+  .ni { font-size:12px; padding:8px 8px; }
+}
 </style>
   <!-- SheetJS for BOM xlsx parsing -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -239,38 +265,58 @@ tr.clickable:hover { background:var(--bg3); }
 </div>
 
 <!-- MAIN APP -->
-<div id="app" class="hidden">
-  <div class="hdr">
-    <div class="hdr-row">
-      <div class="hdr-brand">
-        <span>🔧 ENJET</span>
-        <span style="font-size:12px;background:rgba(255,255,255,0.25);padding:3px 8px;border-radius:99px;font-weight:700">🧪 BETA</span>
-      </div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <button class="btn-back" onclick="showNotifications()" title="알림 센터">🔔</button>
-        <button class="btn-back" onclick="location.href='https://bhseong77.github.io/Main/'">← 메인</button>
-        <button class="btn-logout" onclick="signOut()">로그아웃</button>
-      </div>
-    </div>
-    <div class="hdr-title">ES사업부 통합 대시보드</div>
-    <div class="hdr-sub" id="userInfo">로그인 중...</div>
-  </div>
+<div id="app" class="hidden" style="display:none;flex-direction:row">
 
-  <!-- TABS -->
-  <div class="tabs-wrap">
-    <div class="tabs">
-      <div class="tab active" data-tab="dashboard" onclick="go('dashboard')">📊 대시보드</div>
-      <div class="tab" data-tab="projects" onclick="go('projects')">📁 프로젝트</div>
-      <div class="tab" data-tab="quotes" onclick="go('quotes')">💰 견적 작성</div>
-      <div class="tab" data-tab="se" onclick="go('se')">🔧 SE팀</div>
-      <div class="tab" data-tab="pe" onclick="go('pe')">🧪 PE팀</div>
-      <div class="tab" data-tab="ae" onclick="go('ae')">🛠️ AE팀</div>
-      <div class="tab" data-tab="manufacturing" onclick="go('manufacturing')">🏭 제조/출하</div>
-      <div class="tab" data-tab="bom" onclick="go('bom')">📋 BOM</div>
-      <div class="tab" data-tab="docs" onclick="go('docs')">📚 문서</div>
-      <div class="tab" data-tab="kpi" onclick="go('kpi')">📊 팀 KPI</div>
-      <div class="tab" data-tab="purchase-req" onclick="go('purchase-req')">🛒 구매요청</div>
+  <!-- 사이드바 -->
+  <aside class="sb">
+    <div class="sb-logo">
+      <div class="sb-mark">ENJET</div>
+      <div class="sb-sub">ES사업부</div>
     </div>
+    <div class="sb-user">
+      <span>👤</span><span id="userInfo" style="font-size:11px">로그인 중...</span>
+    </div>
+    <nav class="sb-nav">
+      <div class="sb-sec">메인</div>
+      <div class="ni on" data-tab="dashboard" onclick="go('dashboard',this)">📊 대시보드</div>
+      <div class="ni" data-tab="projects" onclick="go('projects',this)">📁 프로젝트</div>
+
+      <div class="sb-sec">견적/영업</div>
+      <div class="ni" data-tab="quotes" onclick="go('quotes',this)">💰 견적 작성</div>
+
+      <div class="sb-sec">팀별</div>
+      <div class="ni" data-tab="se" onclick="go('se',this)">🔧 SE팀</div>
+      <div class="ni" data-tab="pe" onclick="go('pe',this)">🧪 PE팀</div>
+      <div class="ni" data-tab="ae" onclick="go('ae',this)">🛠️ AE팀</div>
+      <div class="ni" data-tab="manufacturing" onclick="go('manufacturing',this)">🏭 제조/출하</div>
+
+      <div class="sb-sec">자료</div>
+      <div class="ni" data-tab="bom" onclick="go('bom',this)">📋 BOM</div>
+      <div class="ni" data-tab="docs" onclick="go('docs',this)">📚 문서</div>
+      <div class="ni" data-tab="kpi" onclick="go('kpi',this)">📊 팀 KPI</div>
+
+      <div class="sb-sec">구매</div>
+      <div class="ni" data-tab="purchase-req" onclick="go('purchase-req',this)">🛒 구매요청 <span class="nb" id="badge-prq" style="display:none">0</span></div>
+    </nav>
+    <div class="sb-foot">
+      <div class="sb-foot-btns">
+        <button class="sb-foot-btn" onclick="showNotifications()">🔔 알림</button>
+        <button class="sb-foot-btn" onclick="location.href='https://bhseong77.github.io/Main/'">← 메인</button>
+        <button class="sb-foot-btn" onclick="signOut()">로그아웃</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 우측 메인 영역 -->
+  <div class="app-main">
+    <!-- 상단바 -->
+    <div class="topbar">
+      <div class="topbar-title" id="topbarTitle">대시보드</div>
+    </div>
+
+  <!-- TABS (숨김 - 사이드바로 대체) -->
+  <div class="tabs-wrap" style="display:none">
+    <div class="tabs"></div>
   </div>
 
   <!-- TAB CONTENTS -->
@@ -1490,10 +1536,22 @@ async function loadAllData() {
 // 탭 전환
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-function go(tab) {
+// 탭별 제목 매핑
+const TAB_TITLES = {
+  "dashboard":"대시보드","projects":"프로젝트","quotes":"견적 작성",
+  "se":"SE팀","pe":"PE팀","ae":"AE팀","manufacturing":"제조/출하",
+  "bom":"BOM","docs":"문서","kpi":"팀 KPI","purchase-req":"구매요청"
+};
+
+function go(tab, elOrEvent) {
   currentTab = tab;
-  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
+  // 사이드바 활성화
+  document.querySelectorAll(".ni[data-tab]").forEach(n => n.classList.toggle("on", n.dataset.tab === tab));
+  // 탭 패널
   document.querySelectorAll(".tab-panel").forEach(p => p.classList.toggle("hidden", p.id !== `tab-${tab}`));
+  // 상단 제목
+  const tt = document.getElementById("topbarTitle");
+  if (tt) tt.textContent = TAB_TITLES[tab] || tab;
   if (tab === "dashboard") renderDashboard();
   if (tab === "purchase-req") prqShowList();
   if (tab === "projects") renderProjects();
@@ -4888,6 +4946,7 @@ const PRQ_STORAGE_KEY = "enjet_es_prq_list";  // localStorage 키
 let prqItems = [];        // 현재 편집 중인 품목
 let prqEditId = null;     // 편집 중인 요청 ID (null=신규)
 let prqDraftList = [];    // 저장된 구매요청 목록
+let prqAttachFiles = [];  // 첨부 파일 목록
 
 // ── 목록 로드 ──
 function prqLoadList() {
@@ -4942,6 +5001,11 @@ function prqEditDraft(id) {
     if (du) du.value = draft.dueDate || "";
     if (nt) nt.value = draft.note || "";
 
+    // 편집 시 모드 선택 숨기기
+    const ms2 = document.getElementById("prqModeSelect");
+    const dz2 = document.getElementById("prqDropZoneWrap");
+    if (ms2) ms2.style.display = "none";
+    if (dz2) dz2.style.display = "none";
     document.getElementById("prqHeader").style.display = "block";
     document.getElementById("prqTableWrap").style.display = "block";
     document.getElementById("prqSaveBtn").style.display = "inline-block";
@@ -5005,7 +5069,9 @@ function prqSaveDraft() {
     // 신규 저장
     const newId = `PRQ-${Date.now()}`;
     prqEditId = newId;
-    prqDraftList.unshift({ id: newId, projCode, dept, dueDate, note, items: [...prqItems], approvalLine: [...prqApprovalLine], status: "임시저장", savedAt: now, createdAt: now });
+    prqDraftList.unshift({ id: newId, projCode, dept, dueDate, note, items: [...prqItems], approvalLine: [...prqApprovalLine],
+    attachments: prqAttachFiles.map(f=>({name:f.name,size:f.size,type:f.type})),
+    status: "임시저장", savedAt: now, createdAt: now });
   }
 
   prqSaveList();
@@ -5032,13 +5098,63 @@ async function prqEditAndSubmit(id) {
 function prqReset() {
   prqItems = [];
   prqApprovalLine = [];
+  prqAttachFiles = [];
+  const al = document.getElementById("prqAttachList");
+  if (al) al.innerHTML = "";
+  // 모드 선택 화면으로 복원
+  const ms = document.getElementById("prqModeSelect");
+  const dz = document.getElementById("prqDropZoneWrap");
+  if (ms) ms.style.display = "grid";
+  if (dz) dz.style.display = "none";
   document.getElementById("prqHeader").style.display = "none";
   document.getElementById("prqTableWrap").style.display = "none";
   document.getElementById("prqLoading").style.display = "none";
   document.getElementById("prqApprovalBtn").style.display = "none";
-  document.getElementById("prqSaveBtn") && (document.getElementById("prqSaveBtn").style.display = "none");
-  document.getElementById("prqFileInput").value = "";
+  const sb = document.getElementById("prqSaveBtn");
+  if (sb) sb.style.display = "none";
+  const fi = document.getElementById("prqFileInput");
+  if (fi) fi.value = "";
   document.getElementById("prqTbody").innerHTML = "";
+}
+
+// ── 입력 방식 선택 ──
+function prqSelectMode(mode) {
+  const ms = document.getElementById("prqModeSelect");
+  const dz = document.getElementById("prqDropZoneWrap");
+  if (ms) ms.style.display = "none";
+
+  if (mode === "bom") {
+    // BOM 파일 업로드 모드
+    if (dz) dz.style.display = "block";
+  } else {
+    // 직접 입력 모드: 빈 양식 바로 표시
+    if (dz) dz.style.display = "none";
+    prqItems = [];
+    const today = new Date().toISOString().slice(0,10);
+    const twoWeeks = new Date(Date.now()+14*86400000).toISOString().slice(0,10);
+    document.getElementById("prqHeader").style.display = "block";
+    document.getElementById("prqDept").value = "ES사업부";
+    document.getElementById("prqDueDate").value = twoWeeks;
+    document.getElementById("prqProjCode").value = "";
+    // 빈 행 3개 추가
+    prqItems = [
+      {no:1,name:"",partno:"",spec:"",unit:"EA",qty:1,dueDate:twoWeeks,inout:"외자",maker:""},
+      {no:2,name:"",partno:"",spec:"",unit:"EA",qty:1,dueDate:twoWeeks,inout:"외자",maker:""},
+      {no:3,name:"",partno:"",spec:"",unit:"EA",qty:1,dueDate:twoWeeks,inout:"외자",maker:""},
+    ];
+    document.getElementById("prqTableWrap").style.display = "block";
+    document.getElementById("prqSaveBtn").style.display = "inline-block";
+    document.getElementById("prqApprovalBtn").style.display = "inline-block";
+    document.getElementById("prqItemCount").textContent = "총 0건";
+    prqRenderTable();
+    prqReloadApprovalLine();
+  }
+}
+
+// ── BOM 모드 → 뒤로 ──
+function prqBackToModeSelect() {
+  document.getElementById("prqDropZoneWrap").style.display = "none";
+  document.getElementById("prqModeSelect").style.display = "grid";
 }
 
 function prqHandleDrop(e) {
@@ -5157,6 +5273,9 @@ async function prqHandleFile(file) {
 
     // 결과 표시
     document.getElementById("prqLoading").style.display = "none";
+    // BOM 파싱 완료 - 드롭존 숨기고 결과 표시
+    const dz3 = document.getElementById("prqDropZoneWrap");
+    if (dz3) dz3.style.display = "none";
     document.getElementById("prqProjCode").value = projCode;
     document.getElementById("prqDueDate").value = new Date(Date.now() + 14*86400000).toISOString().slice(0,10);
     document.getElementById("prqHeader").style.display = "block";
@@ -5219,6 +5338,56 @@ function prqRenderTable() {
 function prqAddRow() {
   prqItems.push({ no: prqItems.length+1, name:"", partno:"", spec:"", unit:"EA", qty:1, dueDate:"", inout:"외자", maker:"" });
   prqRenderTable();
+}
+
+// ── 첨부파일 핸들러 ──
+function prqHandleAttachDrop(e) {
+  e.preventDefault();
+  prqHandleAttachFiles(e.dataTransfer.files);
+}
+
+function prqHandleAttachFiles(fileList) {
+  for (const file of fileList) {
+    if (prqAttachFiles.some(f => f.name === file.name && f.size === file.size)) continue;
+    prqAttachFiles.push(file);
+  }
+  prqRenderAttachList();
+}
+
+function prqRenderAttachList() {
+  const list = document.getElementById("prqAttachList");
+  if (!list) return;
+  if (!prqAttachFiles.length) { list.innerHTML = ""; return; }
+
+  list.innerHTML = prqAttachFiles.map((f, i) => {
+    const ext = f.name.split(".").pop().toLowerCase();
+    const icon = ext === "pdf" ? "📄" : ["xlsx","xls"].includes(ext) ? "📊"
+               : ["docx","doc"].includes(ext) ? "📝"
+               : ["jpg","jpeg","png","gif"].includes(ext) ? "🖼️" : "📎";
+    const size = f.size > 1024*1024 ? (f.size/1024/1024).toFixed(1)+"MB"
+               : (f.size/1024).toFixed(0)+"KB";
+    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px">
+      <span style="font-size:18px">${icon}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(f.name)}</div>
+        <div style="font-size:11px;color:var(--t3)">${size}</div>
+      </div>
+      <button onclick="prqRemoveAttach(${i})"
+              style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:2px 6px">✕</button>
+    </div>`;
+  }).join("");
+
+  // 저장 경로 업데이트 (프로젝트코드 기반)
+  const projCode = document.getElementById("prqProjCode")?.value.trim() || "PROJ";
+  const today = new Date().toISOString().slice(0,10).replace(/-/g,"");
+  const pathEl = document.getElementById("prqAttachPath");
+  // TODO: 실제 저장 경로 확정 후 업데이트
+  if (pathEl) pathEl.textContent = `[ 저장 경로 미정 ] → 확정 후: 🏭 구매/구매요청/${projCode}/${today}/`;
+}
+
+function prqRemoveAttach(idx) {
+  prqAttachFiles.splice(idx, 1);
+  prqRenderAttachList();
 }
 
 // ── 결재라인 데이터 ──
@@ -5396,7 +5565,10 @@ async function prqSubmitApproval() {
       currentStep: 0,
       status: "진행중",
       createdAt: now, updatedAt: now,
-      attachments: [], source: "es_bom_module"
+      attachments: prqAttachFiles.map(f=>({name:f.name,size:f.size,type:f.type})),
+      source: "es_bom_module"
+      // TODO: prqAttachFiles 실제 파일을 SharePoint에 업로드
+      // 저장 경로 확정 후: await uploadFilesToSP(prqAttachFiles, spPath)
     };
 
     // approval-master.json 저장
@@ -5488,22 +5660,46 @@ async function prqSubmitApproval() {
           </div>
         </div>
 
-      <!-- BOM 업로드 카드 -->
-      <div style="background:var(--bg2);border:2px dashed var(--border);border-radius:14px;padding:24px;margin-bottom:20px;text-align:center" id="prqDropZone"
-           ondragover="event.preventDefault()" ondrop="prqHandleDrop(event)">
-        <div style="font-size:36px;margin-bottom:8px">📂</div>
-        <div style="font-size:16px;font-weight:700;margin-bottom:4px">BOM 파일을 여기에 드래그하거나 클릭해서 업로드</div>
-        <div style="font-size:12px;color:var(--t3);margin-bottom:16px">솔리드웍스 BOM 엑셀 파일(.xlsx) 지원 · 프로젝트코드/품명/수량 자동 인식</div>
-        <input type="file" id="prqFileInput" accept=".xlsx,.xls" style="display:none" onchange="prqHandleFile(this.files[0])">
-        <button class="btn primary" onclick="document.getElementById('prqFileInput').click()">📁 파일 선택</button>
+      <!-- 입력 방식 선택 -->
+      <div id="prqModeSelect" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+        <div onclick="prqSelectMode('bom')"
+             style="background:var(--bg2);border:2px dashed var(--border);border-radius:14px;padding:24px;text-align:center;cursor:pointer;transition:.15s"
+             onmouseover="this.style.borderColor='var(--p)'" onmouseout="this.style.borderColor='var(--border)'">
+          <div style="font-size:36px;margin-bottom:8px">📂</div>
+          <div style="font-size:16px;font-weight:700;margin-bottom:4px">BOM 파일로 작성</div>
+          <div style="font-size:12px;color:var(--t3)">솔리드웍스 BOM 엑셀 업로드<br>프로젝트코드/품명/수량 자동 인식</div>
+        </div>
+        <div onclick="prqSelectMode('manual')"
+             style="background:var(--bg2);border:2px dashed var(--border);border-radius:14px;padding:24px;text-align:center;cursor:pointer;transition:.15s"
+             onmouseover="this.style.borderColor='var(--p)'" onmouseout="this.style.borderColor='var(--border)'">
+          <div style="font-size:36px;margin-bottom:8px">✍️</div>
+          <div style="font-size:16px;font-weight:700;margin-bottom:4px">직접 입력</div>
+          <div style="font-size:12px;color:var(--t3)">품목을 한 줄씩 직접 입력<br>BOM 없이 빠르게 작성</div>
+        </div>
+      </div>
+
+      <!-- BOM 업로드 카드 (BOM 모드 선택 시) -->
+      <div id="prqDropZoneWrap" style="display:none">
+        <div style="background:var(--bg2);border:2px dashed var(--border);border-radius:14px;padding:24px;margin-bottom:20px;text-align:center" id="prqDropZone"
+             ondragover="event.preventDefault()" ondrop="prqHandleDrop(event)">
+          <div style="font-size:36px;margin-bottom:8px">📂</div>
+          <div style="font-size:16px;font-weight:700;margin-bottom:4px">BOM 파일을 여기에 드래그하거나 클릭해서 업로드</div>
+          <div style="font-size:12px;color:var(--t3);margin-bottom:16px">솔리드웍스 BOM 엑셀 파일(.xlsx) 지원</div>
+          <input type="file" id="prqFileInput" accept=".xlsx,.xls" style="display:none" onchange="prqHandleFile(this.files[0])">
+          <div style="display:flex;gap:8px;justify-content:center">
+            <button class="btn outline" onclick="prqBackToModeSelect()">← 뒤로</button>
+            <button class="btn primary" onclick="document.getElementById('prqFileInput').click()">📁 파일 선택</button>
+          </div>
+        </div>
       </div>
 
       <!-- 파싱 결과 헤더 -->
+      <!-- 파싱 결과 헤더 -->
       <div id="prqHeader" style="display:none;background:var(--bg2);border-radius:12px;padding:16px;margin-bottom:16px">
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;flex-wrap:wrap">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
           <div>
-            <div style="font-size:11px;color:var(--t3);margin-bottom:4px">프로젝트코드</div>
-            <input type="text" id="prqProjCode" class="si" placeholder="BP26001" style="width:100%;font-weight:700;font-size:15px">
+            <div style="font-size:11px;color:var(--t3);margin-bottom:4px">프로젝트코드 *</div>
+            <input type="text" id="prqProjCode" class="si" placeholder="BP26001" style="width:100%;font-weight:700;font-size:15px" oninput="prqRenderAttachList()">
           </div>
           <div>
             <div style="font-size:11px;color:var(--t3);margin-bottom:4px">요청부서</div>
@@ -5514,36 +5710,30 @@ async function prqSubmitApproval() {
             <input type="date" id="prqDueDate" class="si" style="width:100%">
           </div>
         </div>
-        <div style="margin-top:10px">
+        <div style="margin-bottom:12px">
           <div style="font-size:11px;color:var(--t3);margin-bottom:4px">특이사항</div>
-          <input type="text" id="prqNote" class="si" placeholder="특이사항 입력" style="width:100%">
+          <textarea id="prqNote" class="si" placeholder="구매 사유, 주의사항, 특이사항 등 자유롭게 입력하세요" rows="3"
+            style="width:100%;resize:vertical;font-size:13px;line-height:1.6;font-family:inherit"></textarea>
         </div>
-
-        <!-- 결재라인 편집 -->
-        <div id="prqApprovalLineWrap" style="margin-top:20px;border:1px solid var(--border);border-radius:12px;overflow:hidden">
-          <div style="background:var(--bg3);padding:10px 16px;display:flex;align-items:center;gap:8px">
-            <div style="font-weight:700;font-size:14px">⚖️ 결재라인</div>
-            <div style="font-size:12px;color:var(--t3)">HR DB 기반 자동 구성 · 편집 가능</div>
-            <button class="btn outline sm" style="margin-left:auto" onclick="prqReloadApprovalLine()">🔄 자동 구성</button>
-            <button class="btn outline sm" onclick="prqAddApprover()">+ 결재자 추가</button>
+        <div>
+          <div style="font-size:11px;color:var(--t3);margin-bottom:6px">📎 파일 첨부 <span style="color:#94a3b8;font-weight:400">(도면, 사양서, 참고문서 등)</span></div>
+          <div id="prqAttachZone"
+               style="border:2px dashed var(--border);border-radius:10px;padding:14px;text-align:center;cursor:pointer;transition:.15s;background:var(--bg)"
+               ondragover="event.preventDefault();this.style.borderColor='#1a6fd4'"
+               ondragleave="this.style.borderColor='var(--border)'"
+               ondrop="prqHandleAttachDrop(event);this.style.borderColor='var(--border)'"
+               onclick="document.getElementById('prqAttachInput').click()">
+            <div style="font-size:22px;margin-bottom:4px">📂</div>
+            <div style="font-size:13px;color:var(--t2);font-weight:600">클릭하거나 파일을 드래그해서 첨부</div>
+            <div style="font-size:11px;color:#94a3b8;margin-top:2px">PDF, Excel, Word, 이미지 등 모두 가능 · 여러 파일 동시 첨부 OK</div>
           </div>
-          <div id="prqApprovalLineBody" style="padding:12px;display:flex;flex-direction:column;gap:6px">
-            <div style="text-align:center;padding:16px;color:var(--t3);font-size:13px">결재라인을 불러오는 중...</div>
-          </div>
-        </div>
-
-        <!-- HR 검색 모달 (결재자 추가용) -->
-        <div id="prqHrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center">
-          <div style="background:var(--bg);border-radius:14px;padding:20px;width:360px;max-width:90vw">
-            <div style="font-weight:700;font-size:16px;margin-bottom:12px">👤 결재자 추가</div>
-            <input type="text" id="prqHrSearch" class="si" placeholder="이름 검색..." style="width:100%;margin-bottom:10px" oninput="prqRenderHrList()">
-            <div id="prqHrList" style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:8px"></div>
-            <div style="margin-top:12px;text-align:right">
-              <button class="btn outline" onclick="document.getElementById('prqHrModal').style.display='none'">닫기</button>
-            </div>
+          <input type="file" id="prqAttachInput" multiple style="display:none" onchange="prqHandleAttachFiles(this.files)">
+          <div id="prqAttachList" style="margin-top:8px;display:flex;flex-direction:column;gap:4px"></div>
+          <div style="margin-top:8px;padding:8px 12px;background:#fffbeb;border-radius:8px;border:1px solid #fde68a;font-size:11px;color:#92400e;display:flex;align-items:center;gap:6px">
+            <span>📁</span>
+            <span>저장 위치: <strong id="prqAttachPath" style="font-family:monospace;font-size:11px">[ 저장 경로 미정 - 추후 설정 필요 ]</strong></span>
           </div>
         </div>
-
       </div>
 
       <!-- 품목 테이블 -->
@@ -5586,4 +5776,4 @@ async function prqSubmitApproval() {
 
     </div>
   </div>
-
+  </div><!-- /app-main -->
