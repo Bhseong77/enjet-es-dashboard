@@ -1495,6 +1495,7 @@ function go(tab) {
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
   document.querySelectorAll(".tab-panel").forEach(p => p.classList.toggle("hidden", p.id !== `tab-${tab}`));
   if (tab === "dashboard") renderDashboard();
+  if (tab === "purchase-req") prqShowList();
   if (tab === "projects") renderProjects();
   if (tab === "quotes") renderQuotes();
   if (tab === "bom") renderBomMaster();
@@ -4881,7 +4882,146 @@ function escHtml(s) {
 // ════════════════════════════════════════════════════════════════════
 // 🛒 구매요청입력 모듈 (BOM xlsx 파싱 → 영림원 구매요청 양식)
 // ════════════════════════════════════════════════════════════════════
-let prqItems = [];  // 현재 품목 리스트
+const PRQ_STORAGE_KEY = "enjet_es_prq_list";  // localStorage 키
+let prqItems = [];        // 현재 편집 중인 품목
+let prqEditId = null;     // 편집 중인 요청 ID (null=신규)
+let prqDraftList = [];    // 저장된 구매요청 목록
+
+// ── 목록 로드 ──
+function prqLoadList() {
+  try {
+    prqDraftList = JSON.parse(localStorage.getItem(PRQ_STORAGE_KEY) || "[]");
+  } catch { prqDraftList = []; }
+}
+
+// ── 목록 저장 ──
+function prqSaveList() {
+  localStorage.setItem(PRQ_STORAGE_KEY, JSON.stringify(prqDraftList));
+}
+
+// ── 목록 뷰 표시 ──
+function prqShowList() {
+  prqLoadList();
+  document.getElementById("prqListView").style.display = "block";
+  document.getElementById("prqEditView").style.display = "none";
+  prqRenderList();
+}
+
+// ── 작성 뷰 표시 (신규) ──
+function prqShowNew() {
+  prqEditId = null;
+  prqItems = [];
+  document.getElementById("prqListView").style.display = "none";
+  document.getElementById("prqEditView").style.display = "block";
+  prqReset();
+}
+
+// ── 기존 항목 편집 ──
+function prqEditDraft(id) {
+  prqLoadList();
+  const draft = prqDraftList.find(d => d.id === id);
+  if (!draft) return;
+  prqEditId = id;
+  prqItems = draft.items || [];
+
+  document.getElementById("prqListView").style.display = "none";
+  document.getElementById("prqEditView").style.display = "block";
+
+  // 헤더 필드 채우기
+  setTimeout(() => {
+    const pc = document.getElementById("prqProjCode");
+    const dd = document.getElementById("prqDept");
+    const du = document.getElementById("prqDueDate");
+    const nt = document.getElementById("prqNote");
+    if (pc) pc.value = draft.projCode || "";
+    if (dd) dd.value = draft.dept || "ES사업부";
+    if (du) du.value = draft.dueDate || "";
+    if (nt) nt.value = draft.note || "";
+
+    document.getElementById("prqHeader").style.display = "block";
+    document.getElementById("prqTableWrap").style.display = "block";
+    document.getElementById("prqSaveBtn").style.display = "inline-block";
+    document.getElementById("prqApprovalBtn").style.display = "inline-block";
+    document.getElementById("prqItemCount").textContent = `총 ${prqItems.length}건`;
+    prqRenderTable();
+  }, 50);
+}
+
+// ── 목록 렌더링 ──
+function prqRenderList() {
+  const body = document.getElementById("prqListBody");
+  if (!prqDraftList.length) {
+    body.innerHTML = `<div style="text-align:center;padding:40px;color:var(--t3)">
+      <div style="font-size:32px;margin-bottom:8px">📋</div>
+      <div>작성된 구매요청이 없습니다</div>
+      <button class="btn primary" style="margin-top:12px" onclick="prqShowNew()">+ 새 구매요청 작성</button>
+    </div>`;
+    return;
+  }
+  body.innerHTML = prqDraftList.map(d => {
+    const statusColor = d.status === "상신완료" ? "#059669" : d.status === "임시저장" ? "#d97706" : "#6b7280";
+    const statusBg    = d.status === "상신완료" ? "#d1fae5" : d.status === "임시저장" ? "#fef3c7" : "#f3f4f6";
+    return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <div style="font-weight:700;font-size:15px">${escHtml(d.projCode||"프로젝트코드 없음")}</div>
+        <div style="font-size:13px;color:var(--t2);margin-top:2px">${escHtml(d.dept||"")} · ${d.items?.length||0}건 · 납기 ${escHtml(d.dueDate||"-")}</div>
+        <div style="font-size:12px;color:var(--t3);margin-top:2px">저장: ${d.savedAt ? d.savedAt.slice(0,16).replace("T"," ") : "-"}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="background:${statusBg};color:${statusColor};font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px">${d.status||"임시저장"}</span>
+        ${d.status !== "상신완료" ? `<button class="btn outline sm" onclick="prqEditDraft('${d.id}')">✏️ 편집</button>` : ""}
+        ${d.status !== "상신완료" ? `<button class="btn sm" style="background:#7c3aed;color:#fff" onclick="prqEditAndSubmit('${d.id}')">⚖️ 상신</button>` : ""}
+        <button class="btn outline sm" style="color:#ef4444;border-color:#ef4444" onclick="prqDeleteDraft('${d.id}')">🗑️</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+// ── 임시저장 ──
+function prqSaveDraft() {
+  const projCode = document.getElementById("prqProjCode")?.value.trim() || "";
+  const dept     = document.getElementById("prqDept")?.value.trim() || "ES사업부";
+  const dueDate  = document.getElementById("prqDueDate")?.value || "";
+  const note     = document.getElementById("prqNote")?.value.trim() || "";
+
+  if (!projCode && prqItems.length === 0) { alert("프로젝트코드 또는 품목을 입력하세요"); return; }
+
+  prqLoadList();
+  const now = new Date().toISOString();
+
+  if (prqEditId) {
+    // 기존 수정
+    const idx = prqDraftList.findIndex(d => d.id === prqEditId);
+    if (idx >= 0) {
+      prqDraftList[idx] = { ...prqDraftList[idx], projCode, dept, dueDate, note, items: [...prqItems], savedAt: now };
+    }
+  } else {
+    // 신규 저장
+    const newId = `PRQ-${Date.now()}`;
+    prqEditId = newId;
+    prqDraftList.unshift({ id: newId, projCode, dept, dueDate, note, items: [...prqItems], status: "임시저장", savedAt: now, createdAt: now });
+  }
+
+  prqSaveList();
+  document.getElementById("prqSaveBtn").style.display = "inline-block";
+  document.getElementById("prqApprovalBtn").style.display = "inline-block";
+  toast(`💾 임시저장 완료 (${projCode||"무제"} · ${prqItems.length}건)`, "success");
+}
+
+// ── 삭제 ──
+function prqDeleteDraft(id) {
+  if (!confirm("이 구매요청을 삭제하시겠습니까?")) return;
+  prqLoadList();
+  prqDraftList = prqDraftList.filter(d => d.id !== id);
+  prqSaveList();
+  prqRenderList();
+}
+
+// ── 편집 후 바로 상신 ──
+async function prqEditAndSubmit(id) {
+  prqEditDraft(id);
+  setTimeout(() => prqSubmitApproval(), 200);
+}
 
 function prqReset() {
   prqItems = [];
@@ -5145,8 +5285,30 @@ async function prqSubmitApproval() {
 
     toast(`✅ 결재상신 완료: ${apId}`, "success");
 
+    // 목록 상태 업데이트 (상신완료로 변경)
+    if (prqEditId) {
+      prqLoadList();
+      const idx = prqDraftList.findIndex(d => d.id === prqEditId);
+      if (idx >= 0) {
+        prqDraftList[idx].status = "상신완료";
+        prqDraftList[idx].approvalId = apId;
+        prqDraftList[idx].submittedAt = new Date().toISOString();
+      } else {
+        prqDraftList.unshift({
+          id: prqEditId || `PRQ-${Date.now()}`,
+          projCode, dept, items: validItems,
+          status: "상신완료", approvalId: apId,
+          savedAt: new Date().toISOString(), submittedAt: new Date().toISOString()
+        });
+      }
+      prqSaveList();
+    }
+
     // enjet-approval 자동 오픈
     setTimeout(() => window.open(`https://bhseong77.github.io/enjet-approval/?ap=${apId}`, "_blank"), 800);
+
+    // 목록으로 돌아가기
+    setTimeout(() => prqShowList(), 1000);
 
   } catch(e) {
     toast("상신 실패: " + e.message, "error");
@@ -5162,15 +5324,36 @@ async function prqSubmitApproval() {
   <div id="tab-purchase-req" class="tab-panel hidden">
     <div style="padding:16px;max-width:1200px;margin:0 auto">
 
-      <!-- 헤더 -->
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
-        <div style="font-size:20px;font-weight:800">🛒 구매요청입력</div>
-        <div style="font-size:13px;color:var(--t3)">BOM 파일 업로드 → 자동 파싱 → 결재상신</div>
-        <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn outline sm" onclick="prqReset()">🗑️ 초기화</button>
-          <button class="btn primary" id="prqApprovalBtn" onclick="prqSubmitApproval()" style="display:none">⚖️ 결재상신</button>
+      <!-- ① 목록 뷰 -->
+      <div id="prqListView">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+          <div style="font-size:20px;font-weight:800">🛒 구매요청 목록</div>
+          <div style="margin-left:auto">
+            <button class="btn primary" onclick="prqShowNew()">+ 새 구매요청</button>
+          </div>
+        </div>
+        <div id="prqListBody" style="display:flex;flex-direction:column;gap:10px">
+          <div style="text-align:center;padding:40px;color:var(--t3)">
+            <div style="font-size:32px;margin-bottom:8px">📋</div>
+            <div>작성된 구매요청이 없습니다</div>
+            <button class="btn primary" style="margin-top:12px" onclick="prqShowNew()">+ 새 구매요청 작성</button>
+          </div>
         </div>
       </div>
+
+      <!-- ② 작성 뷰 -->
+      <div id="prqEditView" style="display:none">
+        <!-- 헤더 -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+          <button class="btn outline sm" onclick="prqShowList()">← 목록</button>
+          <div style="font-size:18px;font-weight:800">🛒 구매요청 작성</div>
+          <div style="font-size:13px;color:var(--t3)">BOM 파일 업로드 → 자동 파싱</div>
+          <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn outline sm" onclick="prqReset()">🗑️ 초기화</button>
+            <button class="btn" id="prqSaveBtn" onclick="prqSaveDraft()" style="display:none;background:#059669;color:#fff">💾 임시저장</button>
+            <button class="btn primary" id="prqApprovalBtn" onclick="prqSubmitApproval()" style="display:none">⚖️ 결재상신</button>
+          </div>
+        </div>
 
       <!-- BOM 업로드 카드 -->
       <div style="background:var(--bg2);border:2px dashed var(--border);border-radius:14px;padding:24px;margin-bottom:20px;text-align:center" id="prqDropZone"
@@ -5229,9 +5412,11 @@ async function prqSubmitApproval() {
             <tbody id="prqTbody"></tbody>
           </table>
         </div>
-        <div style="margin-top:16px;display:flex;justify-content:flex-end">
+        <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:10px">
+          <button class="btn" style="font-size:14px;padding:10px 20px;background:#059669;color:#fff" onclick="prqSaveDraft()">💾 임시저장</button>
           <button class="btn purple" style="font-size:15px;padding:12px 28px" onclick="prqSubmitApproval()">⚖️ 결재상신</button>
         </div>
+      </div><!-- /prqEditView -->
       </div>
 
       <!-- 로딩 -->
