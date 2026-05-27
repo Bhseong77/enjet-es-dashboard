@@ -4961,10 +4961,15 @@ function prqSaveList() {
 }
 
 // ── 목록 뷰 표시 ──
-function prqShowList() {
+async function prqShowList() {
   prqLoadList();
   document.getElementById("prqListView").style.display = "block";
   document.getElementById("prqEditView").style.display = "none";
+  // approval-master 최신 상태 로드 (결재 진행상태 반영)
+  try {
+    const am = await fetchJson(APPROVAL_MASTER_PATH);
+    if (am) approvalMaster = am;
+  } catch(e) { console.warn("approval 로드 실패:", e); }
   prqRenderList();
 }
 
@@ -5018,6 +5023,37 @@ function prqEditDraft(id) {
 }
 
 // ── 목록 렌더링 ──
+// ── 결재 상태 → 표시 정보 변환 ──
+function prqGetApprovalStatus(draft) {
+  if (!draft.approvalId) return null;
+  const approvals = approvalMaster?.approvals || [];
+  return approvals.find(a => a.id === draft.approvalId) || null;
+}
+
+function prqStatusBadge(draft, approval) {
+  // approval-master 실시간 상태 우선
+  if (approval) {
+    const st = approval.status || "";
+    const line = approval.approvalLine || [];
+    const total = line.length;
+    const done  = line.filter(s => s.status === "승인").length;
+    const rejected = line.some(s => s.status === "반려");
+
+    if (rejected) return { color:"#dc2626", bg:"#fee2e2", text:"❌ 반려", dot:"🔴" };
+    if (st === "완료" || st === "승인완료") return { color:"#059669", bg:"#d1fae5", text:"✅ 승인완료", dot:"🟢" };
+    if (total > 0) {
+      const currStep = approval.currentStep ?? 0;
+      const currName = line[currStep]?.name || "";
+      return { color:"#1d4ed8", bg:"#dbeafe", text:`⏳ 결재진행중 (${done}/${total})`, dot:"🔵", detail:`현재: ${currName}` };
+    }
+    return { color:"#059669", bg:"#d1fae5", text:"📤 상신완료", dot:"🟢" };
+  }
+  // approval 없으면 로컬 상태
+  if (draft.status === "임시저장") return { color:"#d97706", bg:"#fef3c7", text:"💾 임시저장", dot:"🟡" };
+  if (draft.status === "상신완료") return { color:"#059669", bg:"#d1fae5", text:"📤 상신완료", dot:"🟢" };
+  return { color:"#6b7280", bg:"#f3f4f6", text:draft.status||"임시저장", dot:"⚪" };
+}
+
 function prqRenderList() {
   const body = document.getElementById("prqListBody");
   if (!prqDraftList.length) {
@@ -5028,20 +5064,51 @@ function prqRenderList() {
     </div>`;
     return;
   }
+
   body.innerHTML = prqDraftList.map(d => {
-    const statusColor = d.status === "상신완료" ? "#059669" : d.status === "임시저장" ? "#d97706" : "#6b7280";
-    const statusBg    = d.status === "상신완료" ? "#d1fae5" : d.status === "임시저장" ? "#fef3c7" : "#f3f4f6";
-    return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <div style="flex:1;min-width:200px">
-        <div style="font-weight:700;font-size:15px">${escHtml(d.projCode||"프로젝트코드 없음")}</div>
-        <div style="font-size:13px;color:var(--t2);margin-top:2px">${escHtml(d.dept||"")} · ${d.items?.length||0}건 · 납기 ${escHtml(d.dueDate||"-")}</div>
-        <div style="font-size:12px;color:var(--t3);margin-top:2px">저장: ${d.savedAt ? d.savedAt.slice(0,16).replace("T"," ") : "-"}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <span style="background:${statusBg};color:${statusColor};font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px">${d.status||"임시저장"}</span>
-        ${d.status !== "상신완료" ? `<button class="btn outline sm" onclick="prqEditDraft('${d.id}')">✏️ 편집</button>` : ""}
-        ${d.status !== "상신완료" ? `<button class="btn sm" style="background:#7c3aed;color:#fff" onclick="prqEditAndSubmit('${d.id}')">⚖️ 상신</button>` : ""}
-        <button class="btn outline sm" style="color:#ef4444;border-color:#ef4444" onclick="prqDeleteDraft('${d.id}')">🗑️</button>
+    const approval = prqGetApprovalStatus(d);
+    const badge    = prqStatusBadge(d, approval);
+    const line     = approval?.approvalLine || d.approvalLine || [];
+    const isFinished = badge.text.includes("승인완료") || badge.text.includes("반려");
+    const canEdit    = !approval || badge.text.includes("임시저장");
+
+    // 결재라인 미니 표시
+    const lineHtml = line.length > 0
+      ? `<div style="display:flex;align-items:center;gap:4px;margin-top:6px;flex-wrap:wrap">
+          ${line.map((s, i) => {
+            const isDone = s.status === "승인";
+            const isCurr = approval && i === (approval.currentStep ?? 0) && !isFinished;
+            const isRej  = s.status === "반려";
+            const dotColor = isRej ? "#dc2626" : isDone ? "#059669" : isCurr ? "#1d4ed8" : "#94a3b8";
+            const bg       = isRej ? "#fee2e2" : isDone ? "#d1fae5" : isCurr ? "#dbeafe" : "#f1f5f9";
+            return `<span style="font-size:11px;padding:2px 7px;border-radius:99px;background:${bg};color:${dotColor};font-weight:${isCurr?'700':'500'}"
+                          title="${s.email}">${s.name} ${isDone?'✓':isRej?'✗':isCurr?'⏳':''}</span>`
+              + (i < line.length-1 ? '<span style="color:#94a3b8;font-size:10px">→</span>' : '');
+          }).join("")}
+        </div>`
+      : "";
+
+    return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px 16px">
+      <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+            <div style="font-weight:800;font-size:15px">${escHtml(d.projCode||"프로젝트코드 없음")}</div>
+            <span style="background:${badge.bg};color:${badge.color};font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px">${badge.text}</span>
+          </div>
+          <div style="font-size:12px;color:var(--t2)">${escHtml(d.dept||"")} · ${d.items?.length||0}건 · 납기 ${escHtml(d.dueDate||"-")}</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:2px">
+            ${d.savedAt ? "저장 "+d.savedAt.slice(0,16).replace("T"," ") : ""}
+            ${d.approvalId ? ` · 결재ID: ${d.approvalId}` : ""}
+          </div>
+          ${lineHtml}
+          ${badge.detail ? `<div style="font-size:11px;color:#1d4ed8;margin-top:4px;font-weight:600">${badge.detail}</div>` : ""}
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex-shrink:0">
+          ${canEdit ? `<button class="btn outline sm" onclick="prqEditDraft('${d.id}')">✏️ 편집</button>` : ""}
+          ${canEdit ? `<button class="btn sm" style="background:#7c3aed;color:#fff" onclick="prqEditAndSubmit('${d.id}')">⚖️ 상신</button>` : ""}
+          ${approval ? `<button class="btn outline sm" onclick="window.open('https://bhseong77.github.io/enjet-approval/?ap=${d.approvalId}','_blank')">🔗 결재창</button>` : ""}
+          <button class="btn outline sm" style="color:#ef4444;border-color:#ef4444" onclick="prqDeleteDraft('${d.id}')">🗑️</button>
+        </div>
       </div>
     </div>`;
   }).join("");
