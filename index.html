@@ -4916,6 +4916,8 @@ function prqShowNew() {
   document.getElementById("prqListView").style.display = "none";
   document.getElementById("prqEditView").style.display = "block";
   prqReset();
+  // 결재라인 바로 자동 구성 (탭 진입 즉시)
+  prqReloadApprovalLine();
 }
 
 // ── 기존 항목 편집 ──
@@ -5024,7 +5026,7 @@ function prqDeleteDraft(id) {
 // ── 편집 후 바로 상신 ──
 async function prqEditAndSubmit(id) {
   prqEditDraft(id);
-  setTimeout(() => prqSubmitApproval(), 200);
+  setTimeout(() => prqSubmitApproval(), 300);
 }
 
 function prqReset() {
@@ -5516,6 +5518,32 @@ async function prqSubmitApproval() {
           <div style="font-size:11px;color:var(--t3);margin-bottom:4px">특이사항</div>
           <input type="text" id="prqNote" class="si" placeholder="특이사항 입력" style="width:100%">
         </div>
+
+        <!-- 결재라인 편집 -->
+        <div id="prqApprovalLineWrap" style="margin-top:20px;border:1px solid var(--border);border-radius:12px;overflow:hidden">
+          <div style="background:var(--bg3);padding:10px 16px;display:flex;align-items:center;gap:8px">
+            <div style="font-weight:700;font-size:14px">⚖️ 결재라인</div>
+            <div style="font-size:12px;color:var(--t3)">HR DB 기반 자동 구성 · 편집 가능</div>
+            <button class="btn outline sm" style="margin-left:auto" onclick="prqReloadApprovalLine()">🔄 자동 구성</button>
+            <button class="btn outline sm" onclick="prqAddApprover()">+ 결재자 추가</button>
+          </div>
+          <div id="prqApprovalLineBody" style="padding:12px;display:flex;flex-direction:column;gap:6px">
+            <div style="text-align:center;padding:16px;color:var(--t3);font-size:13px">결재라인을 불러오는 중...</div>
+          </div>
+        </div>
+
+        <!-- HR 검색 모달 (결재자 추가용) -->
+        <div id="prqHrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center">
+          <div style="background:var(--bg);border-radius:14px;padding:20px;width:360px;max-width:90vw">
+            <div style="font-weight:700;font-size:16px;margin-bottom:12px">👤 결재자 추가</div>
+            <input type="text" id="prqHrSearch" class="si" placeholder="이름 검색..." style="width:100%;margin-bottom:10px" oninput="prqRenderHrList()">
+            <div id="prqHrList" style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:8px"></div>
+            <div style="margin-top:12px;text-align:right">
+              <button class="btn outline" onclick="document.getElementById('prqHrModal').style.display='none'">닫기</button>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- 품목 테이블 -->
@@ -5543,31 +5571,6 @@ async function prqSubmitApproval() {
             <tbody id="prqTbody"></tbody>
           </table>
         </div>
-        <!-- 결재라인 편집 -->
-        <div id="prqApprovalLineWrap" style="margin-top:20px;border:1px solid var(--border);border-radius:12px;overflow:hidden">
-          <div style="background:var(--bg3);padding:10px 16px;display:flex;align-items:center;gap:8px">
-            <div style="font-weight:700;font-size:14px">⚖️ 결재라인</div>
-            <div style="font-size:12px;color:var(--t3)">HR DB 기반 자동 구성 · 편집 가능</div>
-            <button class="btn outline sm" style="margin-left:auto" onclick="prqReloadApprovalLine()">🔄 자동 구성</button>
-            <button class="btn outline sm" onclick="prqAddApprover()">+ 결재자 추가</button>
-          </div>
-          <div id="prqApprovalLineBody" style="padding:12px;display:flex;flex-direction:column;gap:6px">
-            <div style="text-align:center;padding:16px;color:var(--t3);font-size:13px">결재라인을 불러오는 중...</div>
-          </div>
-        </div>
-
-        <!-- HR 검색 모달 (결재자 추가용) -->
-        <div id="prqHrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center">
-          <div style="background:var(--bg);border-radius:14px;padding:20px;width:360px;max-width:90vw">
-            <div style="font-weight:700;font-size:16px;margin-bottom:12px">👤 결재자 추가</div>
-            <input type="text" id="prqHrSearch" class="si" placeholder="이름 검색..." style="width:100%;margin-bottom:10px" oninput="prqRenderHrList()">
-            <div id="prqHrList" style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:8px"></div>
-            <div style="margin-top:12px;text-align:right">
-              <button class="btn outline" onclick="document.getElementById('prqHrModal').style.display='none'">닫기</button>
-            </div>
-          </div>
-        </div>
-
         <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:10px">
           <button class="btn" style="font-size:14px;padding:10px 20px;background:#059669;color:#fff" onclick="prqSaveDraft()">💾 임시저장</button>
           <button class="btn purple" style="font-size:15px;padding:12px 28px" onclick="prqSubmitApproval()">⚖️ 결재상신</button>
