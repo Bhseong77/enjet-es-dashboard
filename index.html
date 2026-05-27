@@ -223,6 +223,8 @@ tr.clickable:hover { background:var(--bg3); }
   .header { padding-top:max(14px, env(safe-area-inset-top)); }
 }
 </style>
+  <!-- SheetJS for BOM xlsx parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -267,6 +269,7 @@ tr.clickable:hover { background:var(--bg3); }
       <div class="tab" data-tab="bom" onclick="go('bom')">📋 BOM</div>
       <div class="tab" data-tab="docs" onclick="go('docs')">📚 문서</div>
       <div class="tab" data-tab="kpi" onclick="go('kpi')">📊 팀 KPI</div>
+      <div class="tab" data-tab="purchase-req" onclick="go('purchase-req')">🛒 구매요청</div>
     </div>
   </div>
 
@@ -3753,18 +3756,37 @@ async function submitApproval() {
   const approvalLine = await buildApprovalLine(userEmail);
   
   // 전자결재 데이터 생성 (전자결재 v1.5 형식)
+  // enjet-approval 호환 결재라인 형식으로 변환
+  const approvalLineFormatted = approvalLine
+    .filter(a => a.role !== "기안자")  // 기안자 제외 (결재자만)
+    .map((a, i) => ({
+      step: i + 1,
+      email: a.email,
+      name: a.name,
+      rank: a.rank || "",
+      dept: a.dept || "ES사업부",
+      status: "대기",
+      actionDate: null,
+      comment: ""
+    }));
+
+  const now = new Date().toISOString();
   const approval = {
-    id: `APR-${Date.now()}`,
-    formId: "PURCHASE",
+    id: `AP-${new Date().toISOString().slice(0,10).replace(/-/g,"")}-ES${Date.now().toString().slice(-3)}`,
+    formId: "PURCHASE_REQUEST",
+    formName: "구매품의",
     title: `[ES] ${quote.projectCode} 구매품의 - ${quote.customer}`,
     drafter: {
       email: userEmail,
       name: userName,
       dept: "ES사업부",
-      rank: "" // HR에서 가져올 수 있음
+      rank: ""
     },
+    // flat 필드도 유지 (호환성)
+    drafterId: userEmail,
+    drafterName: userName,
+    drafterDept: "ES사업부",
     formData: {
-      // 구매품의 양식 필드
       purchaseType: "프로젝트 자재",
       projectCode: quote.projectCode,
       customer: quote.customer,
@@ -3782,13 +3804,15 @@ async function submitApproval() {
       totalQty: currentBomItems.reduce((s, b) => s + (parseFloat(b.qty) || 0), 0),
       totalAmount: quote.summary?.bomTotal || 0,
       specialNote: $("qF_note").value,
-      esQuoteId: quote.id  // ES 견적 ID 연결
+      esQuoteId: quote.id
     },
-    approvalLine,
+    approvalLine: approvalLineFormatted,
     currentStep: 0,
     status: "진행중",
-    createdAt: new Date().toISOString(),
-    source: "es_module"  // ES 모듈에서 자동 생성된 표시
+    createdAt: now,
+    updatedAt: now,
+    attachments: [],
+    source: "es_module"
   };
   
   // approval-master.json에 추가
@@ -3825,6 +3849,11 @@ async function submitApproval() {
     }
     
     toast(`✅ 전자결재 상신 완료\n${approval.id}\n결재선: ${approvalLine.map(a => a.name).join(" → ")}`, "success");
+    
+    // ── enjet-approval 자동 오픈 (결재자가 바로 처리할 수 있도록) ──
+    const apUrl = `https://bhseong77.github.io/enjet-approval/?ap=${approval.id}`;
+    setTimeout(() => window.open(apUrl, "_blank"), 800);
+    
     closeModal("modalQuote");
     renderQuotes();
   } catch (e) {
@@ -4833,7 +4862,384 @@ function showNotifications() {
 
 // 시작
 init();
+
+
+function waitForXLSX(maxWait = 8000) {
+  return new Promise((resolve, reject) => {
+    if (typeof XLSX !== "undefined") { resolve(); return; }
+    const start = Date.now();
+    const iv = setInterval(() => {
+      if (typeof XLSX !== "undefined") { clearInterval(iv); resolve(); }
+      else if (Date.now() - start > maxWait) { clearInterval(iv); reject(new Error("SheetJS 로드 실패")); }
+    }, 100);
+  });
+}
+
+function escHtml(s) {
+  return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+// ════════════════════════════════════════════════════════════════════
+// 🛒 구매요청입력 모듈 (BOM xlsx 파싱 → 영림원 구매요청 양식)
+// ════════════════════════════════════════════════════════════════════
+let prqItems = [];  // 현재 품목 리스트
+
+function prqReset() {
+  prqItems = [];
+  document.getElementById("prqHeader").style.display = "none";
+  document.getElementById("prqTableWrap").style.display = "none";
+  document.getElementById("prqLoading").style.display = "none";
+  document.getElementById("prqApprovalBtn").style.display = "none";
+  document.getElementById("prqFileInput").value = "";
+  document.getElementById("prqTbody").innerHTML = "";
+}
+
+function prqHandleDrop(e) {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (file) prqHandleFile(file);
+}
+
+async function prqHandleFile(file) {
+  if (!file) return;
+  if (!file.name.match(/\.xlsx?$/i)) {
+    alert("xlsx 파일만 지원합니다.");
+    return;
+  }
+
+  document.getElementById("prqLoading").style.display = "block";
+  document.getElementById("prqHeader").style.display = "none";
+  document.getElementById("prqTableWrap").style.display = "none";
+
+  try {
+    // SheetJS로 xlsx 파싱
+    await waitForXLSX();
+    const buf = await file.arrayBuffer();
+    const wb  = XLSX.read(buf, { type: "array" });
+    const ws  = wb.Sheets[wb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+
+    // 헤더 행 찾기
+    let headerRow = -1;
+    let colMap = {};
+    for (let i = 0; i < Math.min(10, raw.length); i++) {
+      const row = raw[i].map(c => String(c).trim());
+      // 품명, 수량 컬럼이 있는 행
+      if (row.some(c => c === "품명") && row.some(c => c === "수량" || c === "Q\'TY")) {
+        headerRow = i;
+        row.forEach((c, j) => {
+          const lc = c.toLowerCase().replace(/\s/g, "");
+          if (c === "품번" || c === "NO.") colMap.no = j;
+          if (c === "품명") colMap.name = j;
+          if (c === "TIT.PRJ." || lc === "tit.prj.") colMap.proj = j;
+          if (c === "Part No. & DWG NO." || lc.includes("partno")) colMap.partno = j;
+          if (c === "Discription" || lc === "discription" || lc === "description") colMap.spec = j;
+          if (c === "Material" || lc === "material") colMap.material = j;
+          if (c === "수량") colMap.qty = j;
+          if (c === "후처리") colMap.process = j;
+        });
+        break;
+      }
+    }
+
+    // 헤더 못 찾으면 첫 행 기준
+    if (headerRow < 0) {
+      const row = raw[0].map(c => String(c).trim());
+      headerRow = 0;
+      row.forEach((c, j) => {
+        if (j === 1) colMap.name = j;
+        if (j === 2) colMap.proj = j;
+        if (j === 8) colMap.qty = j;
+      });
+    }
+
+    // 프로젝트코드 추출 (첫 데이터 행에서)
+    let projCode = "";
+    for (let i = headerRow + 1; i < raw.length; i++) {
+      const val = String(raw[i][colMap.proj] || "").trim();
+      if (val && val !== "-") { projCode = val; break; }
+    }
+
+    // 품목 파싱
+    prqItems = [];
+    for (let i = headerRow + 1; i < raw.length; i++) {
+      const row = raw[i];
+      const name = String(row[colMap.name] ?? "").trim();
+      if (!name || name === "품명") continue;
+
+      const qty  = parseFloat(String(row[colMap.qty] ?? "").replace(/[^0-9.]/g, "")) || 0;
+      if (qty <= 0) continue;
+
+      // 품명에서 제조사 분리: "품명(모델_제조사)" → 품명/제조사 분리
+      let cleanName = name;
+      let maker = "";
+      const mMatch = name.match(/^(.+?)\(([^)]+)_([^)]+)\)$/);
+      const mMatch2 = name.match(/^(.+?)\(([^)]+)\)$/);
+      if (mMatch) {
+        cleanName = mMatch[1].trim();
+        maker = mMatch[3].trim();  // 제조사
+      } else if (mMatch2) {
+        cleanName = mMatch2[1].trim();
+      }
+
+      // 앞의 번호 코드 제거 (BP26001-11- 같은 패턴)
+      cleanName = cleanName.replace(/^[A-Z0-9]+-[0-9]+-/, "").trim();
+      // "대칭 복사" 제거
+      cleanName = cleanName.replace(/^대칭 복사/, "").trim();
+
+      const spec     = String(row[colMap.spec] ?? "").trim();
+      const material = String(row[colMap.material] ?? "").trim();
+      const partno   = String(row[colMap.partno] ?? "").trim();
+
+      const specFull = [spec !== "-" ? spec : "", material && material !== "재질 <지정안함>" ? material : ""]
+                        .filter(Boolean).join(" / ");
+
+      prqItems.push({
+        no:       prqItems.length + 1,
+        name:     cleanName || name,
+        partno:   partno,
+        spec:     specFull,
+        unit:     "EA",
+        qty:      qty,
+        dueDate:  "",
+        inout:    "외자",
+        maker:    maker,
+        origName: name
+      });
+    }
+
+    // 결과 표시
+    document.getElementById("prqLoading").style.display = "none";
+    document.getElementById("prqProjCode").value = projCode;
+    document.getElementById("prqDueDate").value = new Date(Date.now() + 14*86400000).toISOString().slice(0,10);
+    document.getElementById("prqHeader").style.display = "block";
+    document.getElementById("prqTableWrap").style.display = "block";
+    document.getElementById("prqApprovalBtn").style.display = "inline-block";
+    document.getElementById("prqItemCount").textContent = `총 ${prqItems.length}건`;
+    prqRenderTable();
+
+  } catch(e) {
+    document.getElementById("prqLoading").style.display = "none";
+    alert("파싱 오류: " + e.message);
+    console.error(e);
+  }
+}
+
+function prqRenderTable() {
+  const tbody = document.getElementById("prqTbody");
+  const dueDate = document.getElementById("prqDueDate").value;
+  tbody.innerHTML = prqItems.map((it, i) => `
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px;text-align:center;color:var(--t3)">${i+1}</td>
+      <td style="padding:6px">
+        <input type="text" value="${escHtml(it.name)}" class="si" style="width:100%;font-size:12px"
+               onchange="prqItems[${i}].name=this.value">
+        ${it.maker ? `<div style="font-size:11px;color:var(--t3)">📌 ${it.maker}</div>` : ""}
+      </td>
+      <td style="padding:6px">
+        <input type="text" value="${escHtml(it.partno)}" class="si" style="width:100%;font-size:12px"
+               onchange="prqItems[${i}].partno=this.value">
+      </td>
+      <td style="padding:6px">
+        <input type="text" value="${escHtml(it.spec)}" class="si" style="width:100%;font-size:12px"
+               onchange="prqItems[${i}].spec=this.value">
+      </td>
+      <td style="padding:6px;text-align:center">
+        <select class="si" style="width:60px;font-size:12px;padding:3px" onchange="prqItems[${i}].unit=this.value">
+          ${["EA","SET","LOT","M","KG","L"].map(u=>`<option${u===it.unit?" selected":""}>${u}</option>`).join("")}
+        </select>
+      </td>
+      <td style="padding:6px;text-align:center">
+        <input type="number" value="${it.qty}" class="si" style="width:55px;font-size:12px;text-align:right"
+               onchange="prqItems[${i}].qty=parseFloat(this.value)||0">
+      </td>
+      <td style="padding:6px">
+        <input type="date" value="${it.dueDate||dueDate}" class="si" style="width:130px;font-size:12px"
+               onchange="prqItems[${i}].dueDate=this.value">
+      </td>
+      <td style="padding:6px">
+        <select class="si" style="font-size:12px;padding:3px" onchange="prqItems[${i}].inout=this.value">
+          ${["외자","내자","국산"].map(v=>`<option${v===it.inout?" selected":""}>${v}</option>`).join("")}
+        </select>
+      </td>
+      <td style="padding:6px;text-align:center">
+        <button onclick="prqItems.splice(${i},1);prqRenderTable()" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px">✕</button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function prqAddRow() {
+  prqItems.push({ no: prqItems.length+1, name:"", partno:"", spec:"", unit:"EA", qty:1, dueDate:"", inout:"외자", maker:"" });
+  prqRenderTable();
+}
+
+async function prqSubmitApproval() {
+  const projCode = document.getElementById("prqProjCode").value.trim();
+  const dept     = document.getElementById("prqDept").value.trim();
+  const dueDate  = document.getElementById("prqDueDate").value;
+  const note     = document.getElementById("prqNote").value.trim();
+
+  if (!projCode) { alert("프로젝트코드를 입력하세요"); return; }
+  const validItems = prqItems.filter(it => it.name && it.qty > 0);
+  if (validItems.length === 0) { alert("품목을 입력하세요"); return; }
+
+  if (!confirm(`구매품의 결재상신\n\n프로젝트: ${projCode}\n품목수: ${validItems.length}건\n요청부서: ${dept}\n\n결재를 상신하시겠습니까?`)) return;
+
+  try {
+    // 결재라인 생성
+    const approvalLine = await buildApprovalLine(userEmail);
+    const approvalLineFormatted = approvalLine
+      .filter(a => a.role !== "기안자")
+      .map((a, i) => ({
+        step: i+1, email: a.email, name: a.name,
+        rank: a.rank||"", dept: a.dept||dept,
+        status: "대기", actionDate: null, comment: ""
+      }));
+
+    const now = new Date().toISOString();
+    const apId = `AP-${now.slice(0,10).replace(/-/g,"")}-ES${Date.now().toString().slice(-3)}`;
+
+    const approval = {
+      id: apId,
+      formId: "PURCHASE_REQUEST",
+      formName: "구매품의",
+      title: `[ES] ${projCode} 구매품의 - ${validItems.length}건`,
+      drafter: { email: userEmail, name: userName, dept: dept, rank: "" },
+      drafterId: userEmail, drafterName: userName, drafterDept: dept,
+      formData: {
+        purchaseType: "프로젝트 자재",
+        projectCode: projCode,
+        dept: dept,
+        dueDate: dueDate,
+        note: note,
+        items: validItems.map(it => ({
+          name: it.name, partno: it.partno, spec: it.spec,
+          unit: it.unit, qty: it.qty, dueDate: it.dueDate || dueDate,
+          inout: it.inout, maker: it.maker
+        })),
+        totalQty: validItems.reduce((s, it) => s + it.qty, 0),
+      },
+      approvalLine: approvalLineFormatted,
+      currentStep: 0,
+      status: "진행중",
+      createdAt: now, updatedAt: now,
+      attachments: [], source: "es_bom_module"
+    };
+
+    // approval-master.json 저장
+    if (!approvalMaster.approvals) approvalMaster.approvals = [];
+    approvalMaster.approvals.unshift(approval);
+    await saveJson(APPROVAL_MASTER_PATH, approvalMaster);
+
+    // Teams 채널 알림
+    try {
+      const chEntry = Object.values(channelMap||{}).find(c => c.projectCode === projCode);
+      if (chEntry?.channelId) {
+        await postChannelMessage(chEntry.channelId,
+          `<p><b>⚖️ 구매품의 결재상신</b></p>
+           <p>프로젝트: <b>${projCode}</b> · 품목: <b>${validItems.length}건</b></p>
+           <p>결재선: ${approvalLineFormatted.map(a=>a.name).join(" → ")}</p>`
+        );
+      }
+    } catch(_) {}
+
+    toast(`✅ 결재상신 완료: ${apId}`, "success");
+
+    // enjet-approval 자동 오픈
+    setTimeout(() => window.open(`https://bhseong77.github.io/enjet-approval/?ap=${apId}`, "_blank"), 800);
+
+  } catch(e) {
+    toast("상신 실패: " + e.message, "error");
+    console.error(e);
+  }
+}
+
 </script>
 
 </body>
 </html>
+  <!-- 🛒 구매요청입력 탭 -->
+  <div id="tab-purchase-req" class="tab-panel hidden">
+    <div style="padding:16px;max-width:1200px;margin:0 auto">
+
+      <!-- 헤더 -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+        <div style="font-size:20px;font-weight:800">🛒 구매요청입력</div>
+        <div style="font-size:13px;color:var(--t3)">BOM 파일 업로드 → 자동 파싱 → 결재상신</div>
+        <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn outline sm" onclick="prqReset()">🗑️ 초기화</button>
+          <button class="btn primary" id="prqApprovalBtn" onclick="prqSubmitApproval()" style="display:none">⚖️ 결재상신</button>
+        </div>
+      </div>
+
+      <!-- BOM 업로드 카드 -->
+      <div style="background:var(--bg2);border:2px dashed var(--border);border-radius:14px;padding:24px;margin-bottom:20px;text-align:center" id="prqDropZone"
+           ondragover="event.preventDefault()" ondrop="prqHandleDrop(event)">
+        <div style="font-size:36px;margin-bottom:8px">📂</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:4px">BOM 파일을 여기에 드래그하거나 클릭해서 업로드</div>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:16px">솔리드웍스 BOM 엑셀 파일(.xlsx) 지원 · 프로젝트코드/품명/수량 자동 인식</div>
+        <input type="file" id="prqFileInput" accept=".xlsx,.xls" style="display:none" onchange="prqHandleFile(this.files[0])">
+        <button class="btn primary" onclick="document.getElementById('prqFileInput').click()">📁 파일 선택</button>
+      </div>
+
+      <!-- 파싱 결과 헤더 -->
+      <div id="prqHeader" style="display:none;background:var(--bg2);border-radius:12px;padding:16px;margin-bottom:16px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;flex-wrap:wrap">
+          <div>
+            <div style="font-size:11px;color:var(--t3);margin-bottom:4px">프로젝트코드</div>
+            <input type="text" id="prqProjCode" class="si" placeholder="BP26001" style="width:100%;font-weight:700;font-size:15px">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--t3);margin-bottom:4px">요청부서</div>
+            <input type="text" id="prqDept" class="si" value="ES사업부" style="width:100%">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--t3);margin-bottom:4px">납기요청일</div>
+            <input type="date" id="prqDueDate" class="si" style="width:100%">
+          </div>
+        </div>
+        <div style="margin-top:10px">
+          <div style="font-size:11px;color:var(--t3);margin-bottom:4px">특이사항</div>
+          <input type="text" id="prqNote" class="si" placeholder="특이사항 입력" style="width:100%">
+        </div>
+      </div>
+
+      <!-- 품목 테이블 -->
+      <div id="prqTableWrap" style="display:none">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="font-weight:700;font-size:15px">📋 구매요청 품목</div>
+          <span id="prqItemCount" style="font-size:13px;color:var(--t3)"></span>
+          <button class="btn outline sm" onclick="prqAddRow()" style="margin-left:auto">+ 행 추가</button>
+        </div>
+        <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border)">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="background:var(--bg3)">
+                <th style="padding:8px 6px;text-align:center;width:36px">No</th>
+                <th style="padding:8px 6px;text-align:left;min-width:200px;color:#ef4444">품명 *</th>
+                <th style="padding:8px 6px;text-align:left;min-width:120px">품번</th>
+                <th style="padding:8px 6px;text-align:left;min-width:120px">규격</th>
+                <th style="padding:8px 6px;text-align:center;width:70px;color:#ef4444">단위 *</th>
+                <th style="padding:8px 6px;text-align:center;width:70px;color:#ef4444">수량 *</th>
+                <th style="padding:8px 6px;text-align:left;min-width:100px">납기요청일</th>
+                <th style="padding:8px 6px;text-align:left;min-width:100px">내외자구분</th>
+                <th style="padding:8px 6px;text-align:center;width:40px"></th>
+              </tr>
+            </thead>
+            <tbody id="prqTbody"></tbody>
+          </table>
+        </div>
+        <div style="margin-top:16px;display:flex;justify-content:flex-end">
+          <button class="btn purple" style="font-size:15px;padding:12px 28px" onclick="prqSubmitApproval()">⚖️ 결재상신</button>
+        </div>
+      </div>
+
+      <!-- 로딩 -->
+      <div id="prqLoading" style="display:none;text-align:center;padding:40px">
+        <div style="font-size:32px;margin-bottom:8px">⚙️</div>
+        <div style="font-size:15px;color:var(--t2)">BOM 파싱 중...</div>
+      </div>
+
+    </div>
+  </div>
+
